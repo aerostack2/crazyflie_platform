@@ -8,6 +8,8 @@ if(NOT CMAKE_CXX_STANDARD)
 endif()
 #########################
 
+# Add the crazyflie_cpp submodule
+add_subdirectory(crazyflie_cpp)
 
 
 
@@ -30,10 +32,11 @@ set(HEADER_HPP_FILES
 
 include_directories(
   include/${PROJECT_NAME}
+  crazyflie_cpp/include/crazyflie_cpp
 )
 
 
-add_executable(${PROJECT_NAME}_node src/crazyflie_platform.cpp)
+add_executable(${PROJECT_NAME}_node src/crazyflie_node.cpp src/crazyflie_platform.cpp)
 ament_target_dependencies(${PROJECT_NAME}_node 
   rclcpp 
   sensor_msgs 
@@ -43,6 +46,9 @@ ament_target_dependencies(${PROJECT_NAME}_node
   as2_core
   as2_msgs
   geometry_msgs
+)
+target_link_libraries(${PROJECT_NAME}_node 
+  crazyflie_cpp
 )
 
 
