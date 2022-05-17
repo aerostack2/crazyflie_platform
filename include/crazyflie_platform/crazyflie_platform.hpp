@@ -39,6 +39,7 @@ class CrazyfliePlatform : public as2::AerialPlatform
     private:
     std::shared_ptr<Crazyflie> cf_;
     rclcpp::TimerBase::SharedPtr ping_timer_;
+    bool is_connected_;
 
     /*  --  SENSORS --  */
 
