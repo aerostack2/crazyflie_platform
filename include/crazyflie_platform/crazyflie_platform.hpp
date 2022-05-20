@@ -16,9 +16,15 @@
 #include "rclcpp/rclcpp.hpp"
 #include <Crazyflie.h>
 
+struct log
+{
+    float pm_vbat;
+    uint8_t charge_percent;
+}__attribute__((packed));
+
 class CrazyfliePlatform : public as2::AerialPlatform
 {
-    public:
+public:
     CrazyfliePlatform();
 
     /*  --  AS2 FUNCTIONS --  */
@@ -27,49 +33,50 @@ class CrazyfliePlatform : public as2::AerialPlatform
 
     bool ownSetArmingState(bool state);
     bool ownSetOffboardControl(bool offboard);
-    bool ownSetPlatformControlMode(const as2_msgs::msg::ControlMode & msg);
+    bool ownSetPlatformControlMode(const as2_msgs::msg::ControlMode &msg);
     bool ownSendCommand();
 
     /*  --  CRAZYFLIE FUNCTIONS --  */
 
     void listVariables();
     void pingCB();
-    void onLogIMU(uint32_t time_in_ms, std::vector<double>* values, void* /*userData*/);
-    void onLogOdomOri(uint32_t time_in_ms, std::vector<double>* values, void* /*userData*/);
-    void onLogOdomPos(uint32_t time_in_ms, std::vector<double>* values, void* /*userData*/);
-    void onLogBattery(uint32_t time_in_ms, std::vector<uint8_t>* values, void* /*userData*/);
+    void onLogIMU(uint32_t time_in_ms, std::vector<double> *values, void * /*userData*/);
+    void onLogOdomOri(uint32_t time_in_ms, std::vector<double> *values, void * /*userData*/);
+    void onLogOdomPos(uint32_t time_in_ms, std::vector<double> *values, void * /*userData*/);
+    void onLogBattery(uint32_t /*time_in_ms*/, struct log *data);
     void updateOdom();
 
-    private:
+private:
     std::shared_ptr<Crazyflie> cf_;
     rclcpp::TimerBase::SharedPtr ping_timer_;
     bool is_connected_;
-    
+
     /*  --  SENSORS --  */
 
     // Odometry
-    //using Odometry = as2::sensors::Sensor<nav_msgs::msg::Odometry>;
+    // using Odometry = as2::sensors::Sensor<nav_msgs::msg::Odometry>;
     std::unique_ptr<as2::sensors::Sensor<nav_msgs::msg::Odometry>> odom_estimate_ptr_;
     double odom_buff_[10];
-    std::function<void(uint32_t, std::vector<double>*, void*)> cb_odom_ori_;
+    std::function<void(uint32_t, std::vector<double> *, void *)> cb_odom_ori_;
     std::shared_ptr<LogBlockGeneric> odom_logBlock_ori_;
     bool ori_rec_;
 
-    std::function<void(uint32_t, std::vector<double>*, void*)> cb_odom_pos_;
+    std::function<void(uint32_t, std::vector<double> *, void *)> cb_odom_pos_;
     std::shared_ptr<LogBlockGeneric> odom_logBlock_pos_;
     bool pos_rec_;
 
     // IMU
     std::unique_ptr<as2::sensors::Imu> imu_sensor_ptr_;
     double imu_buff_[6];
-    std::function<void(uint32_t, std::vector<double>*, void*)> cb_imu_;
+    std::function<void(uint32_t, std::vector<double> *, void *)> cb_imu_;
     std::shared_ptr<LogBlockGeneric> imu_logBlock_;
 
     // Battery
     std::unique_ptr<as2::sensors::Sensor<sensor_msgs::msg::BatteryState>> battery_sensor_ptr_;
     unsigned char battery_buff_;
-    std::function<void(uint32_t, std::vector<double>*, void*)> cb_bat_;
-    std::shared_ptr<LogBlockGeneric> bat_logBlock_;
+    
+    std::unique_ptr<LogBlock<struct log>> bat_logBlock_;
+    std::function<void(uint32_t, struct log*)> cb_bat_;
     
 };
 

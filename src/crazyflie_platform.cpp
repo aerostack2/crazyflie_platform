@@ -25,7 +25,7 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
   } while (!is_connected_);
   RCLCPP_INFO(this->get_logger(), "Connected to: %s", URI.c_str());
   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-  
+
   listVariables();
 
   cf_->logReset();
@@ -53,13 +53,13 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
   imu_logBlock_ = std::make_shared<LogBlockGeneric>(cf_.get(), vars_imu, nullptr, cb_imu_);
   imu_logBlock_->start(10);
 
-  // Batterry 
-  
-  std::vector<std::string> vars_bat = {"pm.batteryLevel"};
-  cb_bat_ = std::bind(&CrazyfliePlatform::onLogIMU, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
-  bat_logBlock_ = std::make_shared<LogBlockGeneric>(cf_.get(), vars_bat, nullptr, cb_bat_);
-  bat_logBlock_->start(10);
+  // Batterry
 
+  std::vector<std::string> vars_bat = {"pm.batteryLevel"};
+  cb_bat_ = std::bind(&CrazyfliePlatform::onLogBattery, this, std::placeholders::_1, std::placeholders::_2);
+  bat_logBlock_.reset(new LogBlock<struct log>(
+      cf_.get(), {{"pm", "vbat"}, {"pm", "batteryLevel"}}, cb_bat_));
+  bat_logBlock_->start(100);
 
   /*    TIMERS   */
   ping_timer_ = this->create_wall_timer(
@@ -161,20 +161,14 @@ void CrazyfliePlatform::updateOdom()
   odom_estimate_ptr_->updateData(odom_msg);
 }
 
-void CrazyfliePlatform::onLogBattery(uint32_t time_in_ms, std::vector<uint8_t>* values, void* /*userData*/){
-
-  for (u_int8_t v : *values)
-  {
-    battery_buff_ = v;
-  }
-  std::cout << "hey";
-  float vBat = cf_->vbat();
+void CrazyfliePlatform::onLogBattery(uint32_t /*time_in_ms*/, struct log *data)
+{
 
   sensor_msgs::msg::BatteryState msg;
 
-  msg.percentage = battery_buff_;
-  msg.voltage = vBat;
-  
+  msg.percentage = data->charge_percent;
+  msg.voltage = data->pm_vbat;
+
   battery_sensor_ptr_->updateData(msg);
 }
 
