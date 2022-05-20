@@ -6,8 +6,8 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
 {
   RCLCPP_INFO(this->get_logger(), "Init");
   configureSensors();
-  // Connect to crazyflie
-  uint8_t group_mask = 0b00000001U;
+
+  /*    SET-UP    */
   std::string URI = "radio://0/80/250K/E7E7E7E7E7";
   do
   {
@@ -25,6 +25,7 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
   } while (!is_connected_);
   RCLCPP_INFO(this->get_logger(), "Connected to: %s", URI.c_str());
   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+  
   listVariables();
 
   cf_->logReset();
@@ -315,7 +316,6 @@ void CrazyfliePlatform::listVariables()
 
 void CrazyfliePlatform::pingCB()
 {
-  // RCLCPP_INFO(this->get_logger(), "PIN1");
   try
   {
     cf_->getProtocolVersion();
@@ -332,6 +332,4 @@ void CrazyfliePlatform::pingCB()
     RCLCPP_WARN(this->get_logger(), "Connection error: %s", e.what());
     is_connected_ = false;
   }
-
-  // RCLCPP_INFO(this->get_logger(), "PIN2");
 }

@@ -21,6 +21,8 @@ class CrazyfliePlatform : public as2::AerialPlatform
     public:
     CrazyfliePlatform();
 
+    /*  --  AS2 FUNCTIONS --  */
+
     void configureSensors();
 
     bool ownSetArmingState(bool state);
@@ -28,7 +30,8 @@ class CrazyfliePlatform : public as2::AerialPlatform
     bool ownSetPlatformControlMode(const as2_msgs::msg::ControlMode & msg);
     bool ownSendCommand();
 
-    // Crazyflie Functions
+    /*  --  CRAZYFLIE FUNCTIONS --  */
+
     void listVariables();
     void pingCB();
     void onLogIMU(uint32_t time_in_ms, std::vector<double>* values, void* /*userData*/);
@@ -41,9 +44,8 @@ class CrazyfliePlatform : public as2::AerialPlatform
     std::shared_ptr<Crazyflie> cf_;
     rclcpp::TimerBase::SharedPtr ping_timer_;
     bool is_connected_;
-
+    
     /*  --  SENSORS --  */
-
 
     // Odometry
     //using Odometry = as2::sensors::Sensor<nav_msgs::msg::Odometry>;
@@ -56,8 +58,6 @@ class CrazyfliePlatform : public as2::AerialPlatform
     std::function<void(uint32_t, std::vector<double>*, void*)> cb_odom_pos_;
     std::shared_ptr<LogBlockGeneric> odom_logBlock_pos_;
     bool pos_rec_;
-
-
 
     // IMU
     std::unique_ptr<as2::sensors::Imu> imu_sensor_ptr_;
