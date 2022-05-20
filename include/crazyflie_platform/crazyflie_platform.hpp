@@ -34,6 +34,7 @@ class CrazyfliePlatform : public as2::AerialPlatform
     void onLogIMU(uint32_t time_in_ms, std::vector<double>* values, void* /*userData*/);
     void onLogOdomOri(uint32_t time_in_ms, std::vector<double>* values, void* /*userData*/);
     void onLogOdomPos(uint32_t time_in_ms, std::vector<double>* values, void* /*userData*/);
+    void onLogBattery(uint32_t time_in_ms, std::vector<uint8_t>* values, void* /*userData*/);
     void updateOdom();
 
     private:
@@ -64,8 +65,11 @@ class CrazyfliePlatform : public as2::AerialPlatform
     std::function<void(uint32_t, std::vector<double>*, void*)> cb_imu_;
     std::shared_ptr<LogBlockGeneric> imu_logBlock_;
 
-    // Opt FLow
-    // TO DO
+    // Battery
+    std::unique_ptr<as2::sensors::Sensor<sensor_msgs::msg::BatteryState>> battery_sensor_ptr_;
+    unsigned char battery_buff_;
+    std::function<void(uint32_t, std::vector<double>*, void*)> cb_bat_;
+    std::shared_ptr<LogBlockGeneric> bat_logBlock_;
     
 };
 

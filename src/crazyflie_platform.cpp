@@ -23,20 +23,25 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
       std::this_thread::sleep_for(std::chrono::milliseconds(5000));
     }
   } while (!is_connected_);
-  std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-  // listVariables();
+  RCLCPP_INFO(this->get_logger(), "Connected to: %s", URI.c_str());
+  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+  listVariables();
 
-  // SENSORS
+  cf_->logReset();
+
+  /*    SENSOR LOGGING    */
   cf_->requestLogToc(true);
 
   // Odom
   ori_rec_ = pos_rec_ = false;
-  std::vector<std::string> vars_odom1 = {"kalman.q0", "kalman.q1", "kalman.q2", "kalman.q3"};
+  // std::vector<std::string> vars_odom1 = {"kalman.q0","kalman.q1","kalman.q2","kalman.q3"};
+  std::vector<std::string> vars_odom1 = {"stateEstimate.qx", "stateEstimate.qy", "stateEstimate.qz", "stateEstimate.qw"};
   cb_odom_ori_ = std::bind(&CrazyfliePlatform::onLogOdomOri, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
   odom_logBlock_ori_ = std::make_shared<LogBlockGeneric>(cf_.get(), vars_odom1, nullptr, cb_odom_ori_);
   odom_logBlock_ori_->start(10);
 
-  std::vector<std::string> vars_odom2 = {"kalman.stateX", "kalman.stateY", "kalman.stateZ", "kalman.statePX", "kalman.statePY", "kalman.statePZ"};
+  // std::vector<std::string> vars_odom2 = {"kalman.stateX", "kalman.stateY", "kalman.stateZ", "kalman.statePX", "kalman.statePY", "kalman.statePZ"};
+  std::vector<std::string> vars_odom2 = {"stateEstimate.x", "stateEstimate.y", "stateEstimate.z", "stateEstimate.vx", "stateEstimate.vy", "stateEstimate.vz"};
   cb_odom_pos_ = std::bind(&CrazyfliePlatform::onLogOdomPos, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
   odom_logBlock_pos_ = std::make_shared<LogBlockGeneric>(cf_.get(), vars_odom2, nullptr, cb_odom_pos_);
   odom_logBlock_pos_->start(10);
@@ -47,9 +52,18 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
   imu_logBlock_ = std::make_shared<LogBlockGeneric>(cf_.get(), vars_imu, nullptr, cb_imu_);
   imu_logBlock_->start(10);
 
+  // Batterry 
+  
+  std::vector<std::string> vars_bat = {"pm.batteryLevel"};
+  cb_bat_ = std::bind(&CrazyfliePlatform::onLogIMU, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+  bat_logBlock_ = std::make_shared<LogBlockGeneric>(cf_.get(), vars_bat, nullptr, cb_bat_);
+  bat_logBlock_->start(10);
+
+
+  /*    TIMERS   */
   ping_timer_ = this->create_wall_timer(
       std::chrono::milliseconds(10), [this]()
-      { pingCB(); });
+      { pingCB(); this->sendCommand(); });
 
   RCLCPP_INFO(this->get_logger(), "Finished Init");
 }
@@ -64,7 +78,7 @@ void CrazyfliePlatform::onLogIMU(uint32_t time_in_ms, std::vector<double> *value
   double transformations[6] = {0.01745329252, 0.01745329252, 0.01745329252, 9.81, 9.81, 9.81};
   for (double v : *values)
   {
-    imu_buff_[i] = v * transformations[i];
+    imu_buff_[i] = double(v * transformations[i]);
     // std::cout << imu_buff_[i] << ",";
     i++;
   }
@@ -88,11 +102,11 @@ void CrazyfliePlatform::onLogIMU(uint32_t time_in_ms, std::vector<double> *value
 void CrazyfliePlatform::onLogOdomOri(uint32_t time_in_ms, std::vector<double> *values, void * /*userData*/)
 {
   // Data is received as follows: {"kalman.q0","kalman.q1","kalman.q2","kalman.q3"};
+
   int i = 0;
-  double transformations[4] = {1, 1, 1, 1};
   for (double v : *values)
   {
-    odom_buff_[i] = v * transformations[i];
+    odom_buff_[i] = (double)v;
     // std::cout << imu_buff_[i] << ",";
     i++;
   }
@@ -107,10 +121,9 @@ void CrazyfliePlatform::onLogOdomPos(uint32_t time_in_ms, std::vector<double> *v
   // Pos in m
   // Vel in m/s
   int i = 4;
-  double transformations[6] = {1, 1, 1, 1, 1, 1};
   for (double v : *values)
   {
-    odom_buff_[i] = v * transformations[i];
+    odom_buff_[i] = (double)v;
     // std::cout << imu_buff_[i] << ",";
     i++;
   }
@@ -147,6 +160,23 @@ void CrazyfliePlatform::updateOdom()
   odom_estimate_ptr_->updateData(odom_msg);
 }
 
+void CrazyfliePlatform::onLogBattery(uint32_t time_in_ms, std::vector<uint8_t>* values, void* /*userData*/){
+
+  for (u_int8_t v : *values)
+  {
+    battery_buff_ = v;
+  }
+  std::cout << "hey";
+  float vBat = cf_->vbat();
+
+  sensor_msgs::msg::BatteryState msg;
+
+  msg.percentage = battery_buff_;
+  msg.voltage = vBat;
+  
+  battery_sensor_ptr_->updateData(msg);
+}
+
 void CrazyfliePlatform::configureSensors()
 {
 
@@ -155,20 +185,21 @@ void CrazyfliePlatform::configureSensors()
   // Hay que cambiar a as2_names::topics::sensor_measurements::imu
   imu_sensor_ptr_ = std::make_unique<as2::sensors::Imu>("imu", this);
   odom_estimate_ptr_ = std::make_unique<as2::sensors::Sensor<nav_msgs::msg::Odometry>>("odometry", this);
+  battery_sensor_ptr_ = std::make_unique<as2::sensors::Sensor<sensor_msgs::msg::BatteryState>>("battery", this);
 }
 
 bool CrazyfliePlatform::ownSendCommand()
 {
   as2_msgs::msg::ControlMode platform_control_mode = this->getControlMode();
-  float vx = this->command_twist_msg_.twist.linear.x;
-  float vy = this->command_twist_msg_.twist.linear.y;
-  float vz = this->command_twist_msg_.twist.linear.z;
+  double vx = this->command_twist_msg_.twist.linear.x;
+  double vy = this->command_twist_msg_.twist.linear.y;
+  double vz = this->command_twist_msg_.twist.linear.z;
 
-  float yawRate = this->command_twist_msg_.twist.angular.z;
+  double yawRate = this->command_twist_msg_.twist.angular.z;
 
-  float z = this->command_pose_msg_.pose.position.z;
+  double z = this->command_pose_msg_.pose.position.z;
 
-  if (platform_control_mode.yaw_mode == as2_msgs::msg::ControlMode::YAW_SPEED && platform_control_mode.reference_frame == as2_msgs::msg::ControlMode::LOCAL_ENU_FRAME)
+  if (platform_control_mode.yaw_mode == as2_msgs::msg::ControlMode::YAW_SPEED && platform_control_mode.reference_frame == as2_msgs::msg::ControlMode::LOCAL_ENU_FRAME && this->getArmingState() && is_connected_)
   {
     switch (platform_control_mode.control_mode)
     {
@@ -178,29 +209,43 @@ bool CrazyfliePlatform::ownSendCommand()
 
     case as2_msgs::msg::ControlMode::SPEED_IN_A_PLANE:
       cf_->sendHoverSetpoint(vx, vy, yawRate, z);
+      RCLCPP_INFO(this->get_logger(), "Hover set to z: %f", z);
       break;
 
     default:
-      RCLCPP_WARN_ONCE(this->get_logger(), "Command/Control Mode not supported");
+      RCLCPP_WARN(this->get_logger(), "Command/Control Mode not supported");
       return false;
-
-      return true;
     }
+  }
+  else if (platform_control_mode.control_mode == as2_msgs::msg::ControlMode::UNSET)
+  {
+    cf_->sendStop();
   }
   else
   {
-    RCLCPP_WARN_ONCE(this->get_logger(), "Command/Control Mode not supported");
+    RCLCPP_WARN(this->get_logger(), "Command/Control Mode not supported");
     return false;
   }
+  return true;
 }
+
 bool CrazyfliePlatform::ownSetArmingState(bool state)
 {
-  return true;
+  // Crazyflie does not have arming. Unarming will be used to stop the motors.
+  if (!state)
+  {
+    RCLCPP_INFO(this->get_logger(), "STOP");
+    cf_->sendStop();
+  }
+
+  return is_connected_;
 }
+
 bool CrazyfliePlatform::ownSetOffboardControl(bool offboard)
 {
-  return true;
+  return is_connected_;
 }
+
 bool CrazyfliePlatform::ownSetPlatformControlMode(const as2_msgs::msg::ControlMode &msg)
 {
   // Only the yaw speed modes implemented with ENU reference.
@@ -231,7 +276,7 @@ bool CrazyfliePlatform::ownSetPlatformControlMode(const as2_msgs::msg::ControlMo
 }
 void CrazyfliePlatform::listVariables()
 {
-  cf_->requestLogToc();
+  cf_->requestLogToc(true);
   std::for_each(cf_->logVariablesBegin(), cf_->logVariablesEnd(),
                 [](const Crazyflie::LogTocEntry &entry)
                 {
@@ -257,7 +302,7 @@ void CrazyfliePlatform::listVariables()
                     std::cout << "int32";
                     break;
                   case Crazyflie::LogTypeFloat:
-                    std::cout << "float";
+                    std::cout << "double";
                     break;
                   case Crazyflie::LogTypeFP16:
                     std::cout << "fp16";
@@ -274,9 +319,13 @@ void CrazyfliePlatform::pingCB()
   try
   {
     cf_->getProtocolVersion();
-    //std::cout << i << std::endl;
-    // cf_->sendPing();
-    if(!is_connected_) is_connected_ = true;
+    // std::cout << i << std::endl;
+    cf_->sendPing();
+    if (!is_connected_)
+    {
+      is_connected_ = true;
+      RCLCPP_INFO(this->get_logger(), "Connection restored!");
+    }
   }
   catch (std::exception &e)
   {
