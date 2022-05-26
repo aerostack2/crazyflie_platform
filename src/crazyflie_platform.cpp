@@ -4,17 +4,18 @@
 
 CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
 {
-  RCLCPP_INFO(this->get_logger(), "Init");
+  RCLCPP_DEBUG(this->get_logger(), "Init");
   configureSensors();
 
   /*    SET-UP    */
-  std::string URI = "radio://0/80/250K/E7E7E7E7E7";
+  this->declare_parameter<std::string>("drone_URI", "radio://0/80/250K/E7E7E7E7E7");
+  this->get_parameter("drone_URI", uri_);
   do
   {
     try
     {
-      RCLCPP_INFO(this->get_logger(), "Connecting to: %s", URI.c_str());
-      cf_ = std::make_shared<Crazyflie>(URI);
+      RCLCPP_DEBUG(this->get_logger(), "Connecting to: %s", uri_.c_str());
+      cf_ = std::make_shared<Crazyflie>(uri_);
       is_connected_ = true;
     }
     catch (std::exception &e)
@@ -23,11 +24,10 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
       std::this_thread::sleep_for(std::chrono::milliseconds(5000));
     }
   } while (!is_connected_);
-  RCLCPP_INFO(this->get_logger(), "Connected to: %s", URI.c_str());
+  RCLCPP_DEBUG(this->get_logger(), "Connected to: %s", uri_.c_str());
   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
   listVariables();
-
   cf_->logReset();
 
   /*    SENSOR LOGGING    */
@@ -54,12 +54,28 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
   imu_logBlock_->start(10);
 
   // Batterry
-
   std::vector<std::string> vars_bat = {"pm.batteryLevel"};
   cb_bat_ = std::bind(&CrazyfliePlatform::onLogBattery, this, std::placeholders::_1, std::placeholders::_2);
-  bat_logBlock_.reset(new LogBlock<struct log>(
+  bat_logBlock_.reset(new LogBlock<struct logBattery>(
       cf_.get(), {{"pm", "vbat"}, {"pm", "batteryLevel"}}, cb_bat_));
   bat_logBlock_->start(100);
+
+  // Optitrack
+  this->declare_parameter<bool>("external_odom", false);
+  this->get_parameter("external_odom", external_odom_);
+
+  RCLCPP_DEBUG(this->get_logger(), "External Localization: %d", external_odom_);
+
+  // If using external localization, create the subscriber to it
+  if (external_odom_)
+  {
+    std::string external_odom_topic_;
+    external_odom_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
+        "external_odom",
+        10,
+        std::bind(&CrazyfliePlatform::externalOdomCB, this, std::placeholders::_1));
+    RCLCPP_DEBUG(this->get_logger(), "Subscribed to external odom topic!");
+  }
 
   /*    TIMERS   */
   ping_timer_ = this->create_wall_timer(
@@ -80,10 +96,8 @@ void CrazyfliePlatform::onLogIMU(uint32_t time_in_ms, std::vector<double> *value
   for (double v : *values)
   {
     imu_buff_[i] = double(v * transformations[i]);
-    // std::cout << imu_buff_[i] << ",";
     i++;
   }
-  // std::cout << std::endl;
 
   // Update IMU state
   sensor_msgs::msg::Imu imu_msg;
@@ -108,7 +122,6 @@ void CrazyfliePlatform::onLogOdomOri(uint32_t time_in_ms, std::vector<double> *v
   for (double v : *values)
   {
     odom_buff_[i] = (double)v;
-    // std::cout << imu_buff_[i] << ",";
     i++;
   }
   ori_rec_ = true;
@@ -125,7 +138,6 @@ void CrazyfliePlatform::onLogOdomPos(uint32_t time_in_ms, std::vector<double> *v
   for (double v : *values)
   {
     odom_buff_[i] = (double)v;
-    // std::cout << imu_buff_[i] << ",";
     i++;
   }
   pos_rec_ = true;
@@ -161,7 +173,7 @@ void CrazyfliePlatform::updateOdom()
   odom_estimate_ptr_->updateData(odom_msg);
 }
 
-void CrazyfliePlatform::onLogBattery(uint32_t /*time_in_ms*/, struct log *data)
+void CrazyfliePlatform::onLogBattery(uint32_t /*time_in_ms*/, struct logBattery *data)
 {
 
   sensor_msgs::msg::BatteryState msg;
@@ -174,10 +186,7 @@ void CrazyfliePlatform::onLogBattery(uint32_t /*time_in_ms*/, struct log *data)
 
 void CrazyfliePlatform::configureSensors()
 {
-
-  RCLCPP_INFO(this->get_logger(), "Configure Sensors");
-
-  // Hay que cambiar a as2_names::topics::sensor_measurements::imu
+  // TODO: Change to as2_names::topics::sensor_measurements::imu
   imu_sensor_ptr_ = std::make_unique<as2::sensors::Imu>("imu", this);
   odom_estimate_ptr_ = std::make_unique<as2::sensors::Sensor<nav_msgs::msg::Odometry>>("odometry", this);
   battery_sensor_ptr_ = std::make_unique<as2::sensors::Sensor<sensor_msgs::msg::BatteryState>>("battery", this);
@@ -186,13 +195,29 @@ void CrazyfliePlatform::configureSensors()
 bool CrazyfliePlatform::ownSendCommand()
 {
   as2_msgs::msg::ControlMode platform_control_mode = this->getControlMode();
-  double vx = this->command_twist_msg_.twist.linear.x;
-  double vy = this->command_twist_msg_.twist.linear.y;
-  double vz = this->command_twist_msg_.twist.linear.z;
+  const double vx = this->command_twist_msg_.twist.linear.x;
+  const double vy = this->command_twist_msg_.twist.linear.y;
+  const double vz = this->command_twist_msg_.twist.linear.z;
 
-  double yawRate = this->command_twist_msg_.twist.angular.z;
+  const double rollRate = this->command_twist_msg_.twist.angular.x;
+  const double pitchRate = this->command_twist_msg_.twist.angular.y;
+  const double yawRate = this->command_twist_msg_.twist.angular.z;
 
-  double z = this->command_pose_msg_.pose.position.z;
+  const double thrust = this->command_thrust_msg_.thrust;
+
+  const double x = this->command_pose_msg_.pose.position.x;
+  const double y = this->command_pose_msg_.pose.position.y;
+  const double z = this->command_pose_msg_.pose.position.z;
+
+  const double qx = this->command_pose_msg_.pose.orientation.x;
+  const double qy = this->command_pose_msg_.pose.orientation.y;
+  const double qz = this->command_pose_msg_.pose.orientation.z;
+  const double qw = this->command_pose_msg_.pose.orientation.w;
+
+  const auto eulerAngles = this->quaternion2Euler(this->command_pose_msg_.pose.orientation);
+  const double roll = eulerAngles[0];
+  const double pitch = eulerAngles[1];
+  const double yaw = eulerAngles[2];
 
   if (platform_control_mode.yaw_mode == as2_msgs::msg::ControlMode::YAW_SPEED && platform_control_mode.reference_frame == as2_msgs::msg::ControlMode::LOCAL_ENU_FRAME && this->getArmingState() && is_connected_)
   {
@@ -204,21 +229,33 @@ bool CrazyfliePlatform::ownSendCommand()
 
     case as2_msgs::msg::ControlMode::SPEED_IN_A_PLANE:
       cf_->sendHoverSetpoint(vx, vy, yawRate, z);
-      RCLCPP_INFO(this->get_logger(), "Hover set to z: %f", z);
+      RCLCPP_DEBUG(this->get_logger(), "Hover set to z: %f", z);
       break;
 
     default:
-      RCLCPP_WARN(this->get_logger(), "Command/Control Mode not supported");
+      static rclcpp::Clock clock;
+      RCLCPP_WARN_THROTTLE(this->get_logger(), clock, 2, "Command/Control Mode not supported");
       return false;
     }
+  }
+  else if (platform_control_mode.control_mode == as2_msgs::msg::ControlMode::POSITION && platform_control_mode.yaw_mode == as2_msgs::msg::ControlMode::YAW_ANGLE)
+  {
+    cf_->sendPositionSetpoint(x, y, z, yaw);
   }
   else if (platform_control_mode.control_mode == as2_msgs::msg::ControlMode::UNSET)
   {
     cf_->sendStop();
   }
+  /* TODO: Acro Mode
+  else if (msg.control_mode == as2_msgs::msg::ControlMode::ACRO)
+  {
+    cf_->sendSetpoint(roll,pitch,yawRate,thrust);
+  }
+  */
   else
   {
-    RCLCPP_WARN(this->get_logger(), "Command/Control Mode not supported");
+    static rclcpp::Clock clock;
+    RCLCPP_WARN_THROTTLE(this->get_logger(), clock, 2, "Command/Control Mode not supported");
     return false;
   }
   return true;
@@ -229,10 +266,10 @@ bool CrazyfliePlatform::ownSetArmingState(bool state)
   // Crazyflie does not have arming. Unarming will be used to stop the motors.
   if (!state)
   {
-    RCLCPP_INFO(this->get_logger(), "STOP");
+    RCLCPP_WARN(this->get_logger(), "STOP");
     cf_->sendStop();
   }
-
+  is_armed_ = state;
   return is_connected_;
 }
 
@@ -250,12 +287,12 @@ bool CrazyfliePlatform::ownSetPlatformControlMode(const as2_msgs::msg::ControlMo
     {
     case as2_msgs::msg::ControlMode::SPEED:
 
-      RCLCPP_INFO(this->get_logger(), "SPEED ENABLED");
+      RCLCPP_DEBUG(this->get_logger(), "SPEED ENABLED");
       break;
 
     case as2_msgs::msg::ControlMode::SPEED_IN_A_PLANE:
 
-      RCLCPP_INFO(this->get_logger(), "SPEED_IN_A_PLANE ENABLED");
+      RCLCPP_DEBUG(this->get_logger(), "SPEED_IN_A_PLANE ENABLED");
       break;
 
     default:
@@ -264,47 +301,56 @@ bool CrazyfliePlatform::ownSetPlatformControlMode(const as2_msgs::msg::ControlMo
     }
     return true;
   }
-  else if (msg.control_mode == as2_msgs::msg::ControlMode::UNSET)
+  else if (msg.control_mode == as2_msgs::msg::ControlMode::POSITION && msg.yaw_mode == as2_msgs::msg::ControlMode::YAW_ANGLE)
     return true;
+  /* TODO: Add acro mode. Thrust is uint16_t and we need to know how it goes.
+  else if (msg.control_mode == as2_msgs::msg::ControlMode::ACRO)
+    return false;
+  */
+  else if (msg.control_mode == as2_msgs::msg::ControlMode::UNSET) return true;
   else
     return false;
 }
+
 void CrazyfliePlatform::listVariables()
 {
   cf_->requestLogToc(true);
   std::for_each(cf_->logVariablesBegin(), cf_->logVariablesEnd(),
-                [](const Crazyflie::LogTocEntry &entry)
+                [this](const Crazyflie::LogTocEntry &entry)
                 {
-                  std::cout << entry.group << "." << entry.name << " (";
+                  std::ostringstream output_stream;
+                  output_stream << entry.group << "." << entry.name << " (";
                   switch (entry.type)
                   {
                   case Crazyflie::LogTypeUint8:
-                    std::cout << "uint8";
+                    output_stream << "uint8";
                     break;
                   case Crazyflie::LogTypeInt8:
-                    std::cout << "int8";
+                    output_stream << "int8";
                     break;
                   case Crazyflie::LogTypeUint16:
-                    std::cout << "uint16";
+                    output_stream << "uint16";
                     break;
                   case Crazyflie::LogTypeInt16:
-                    std::cout << "int16";
+                    output_stream << "int16";
                     break;
                   case Crazyflie::LogTypeUint32:
-                    std::cout << "uint32";
+                    output_stream << "uint32";
                     break;
                   case Crazyflie::LogTypeInt32:
-                    std::cout << "int32";
+                    output_stream << "int32";
                     break;
                   case Crazyflie::LogTypeFloat:
-                    std::cout << "double";
+                    output_stream << "double";
                     break;
                   case Crazyflie::LogTypeFP16:
-                    std::cout << "fp16";
+                    output_stream << "fp16";
                     break;
                   }
-                  std::cout << ")";
-                  std::cout << std::endl;
+                  output_stream << ")";
+                  output_stream << std::endl;
+
+                  RCLCPP_DEBUG(this->get_logger(), output_stream.str());
                 });
 }
 
@@ -313,7 +359,6 @@ void CrazyfliePlatform::pingCB()
   try
   {
     cf_->getProtocolVersion();
-    // std::cout << i << std::endl;
     cf_->sendPing();
     if (!is_connected_)
     {
@@ -323,7 +368,27 @@ void CrazyfliePlatform::pingCB()
   }
   catch (std::exception &e)
   {
-    RCLCPP_WARN(this->get_logger(), "Connection error: %s", e.what());
+    static rclcpp::Clock clock;
+    RCLCPP_WARN_THROTTLE(this->get_logger(), clock, 2, "Connection error: %s", e.what());
     is_connected_ = false;
   }
+}
+
+void CrazyfliePlatform::externalOdomCB(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+{
+  // Send the external localization to the Crazyflie drone
+  cf_->sendExternalPoseUpdate(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z,
+                              msg->pose.orientation.x, msg->pose.orientation.y, msg->pose.orientation.z, msg->pose.orientation.w);
+}
+
+Eigen::Vector3d CrazyfliePlatform::quaternion2Euler(geometry_msgs::msg::Quaternion quat)
+{
+  Eigen::Quaterniond quaternion;
+  quaternion.x() = quat.x;
+  quaternion.y() = quat.y;
+  quaternion.z() = quat.z;
+  quaternion.w() = quat.w;
+  Eigen::Vector3d euler = quaternion.toRotationMatrix().eulerAngles(0, 1, 2);
+
+  return euler;
 }

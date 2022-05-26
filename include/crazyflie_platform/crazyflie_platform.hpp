@@ -15,8 +15,9 @@
 #include "sensor_msgs/msg/nav_sat_status.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include <Crazyflie.h>
+#include <Eigen/Dense>
 
-struct log
+struct logBattery
 {
     float pm_vbat;
     uint8_t charge_percent;
@@ -43,18 +44,25 @@ public:
     void onLogIMU(uint32_t time_in_ms, std::vector<double> *values, void * /*userData*/);
     void onLogOdomOri(uint32_t time_in_ms, std::vector<double> *values, void * /*userData*/);
     void onLogOdomPos(uint32_t time_in_ms, std::vector<double> *values, void * /*userData*/);
-    void onLogBattery(uint32_t /*time_in_ms*/, struct log *data);
+    void onLogBattery(uint32_t /*time_in_ms*/, struct logBattery *data);
     void updateOdom();
+    void externalOdomCB(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+
+
+    /*  --  AUX FUNCTIONS --  */
+
+    Eigen::Vector3d quaternion2Euler(geometry_msgs::msg::Quaternion quat);
 
 private:
     std::shared_ptr<Crazyflie> cf_;
     rclcpp::TimerBase::SharedPtr ping_timer_;
     bool is_connected_;
+    bool is_armed_;
+    std::string uri_;
 
     /*  --  SENSORS --  */
 
     // Odometry
-    // using Odometry = as2::sensors::Sensor<nav_msgs::msg::Odometry>;
     std::unique_ptr<as2::sensors::Sensor<nav_msgs::msg::Odometry>> odom_estimate_ptr_;
     double odom_buff_[10];
     std::function<void(uint32_t, std::vector<double> *, void *)> cb_odom_ori_;
@@ -75,8 +83,12 @@ private:
     std::unique_ptr<as2::sensors::Sensor<sensor_msgs::msg::BatteryState>> battery_sensor_ptr_;
     unsigned char battery_buff_;
     
-    std::unique_ptr<LogBlock<struct log>> bat_logBlock_;
-    std::function<void(uint32_t, struct log*)> cb_bat_;
+    std::unique_ptr<LogBlock<struct logBattery>> bat_logBlock_;
+    std::function<void(uint32_t, struct logBattery*)> cb_bat_;
+
+    // Optitrack
+    bool external_odom_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr external_odom_sub_;
     
 };
 

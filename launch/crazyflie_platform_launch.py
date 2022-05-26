@@ -23,6 +23,8 @@ def generate_launch_description():
         DeclareLaunchArgument('simulation_mode', default_value='false'),
         DeclareLaunchArgument('max_thrust', default_value='0.0'),
         DeclareLaunchArgument('control_modes_file', default_value=config),
+        DeclareLaunchArgument('external_odom',default_value='true'),
+        DeclareLaunchArgument('drone_URI',default_value='radio://0/80/250K/E7E7E7E7E7'),
         # if is not in simulation
         Node(
             package="crazyflie_platform",
@@ -35,7 +37,9 @@ def generate_launch_description():
                 {"mass": LaunchConfiguration('mass'),
                 "simulation_mode": LaunchConfiguration('simulation_mode'),
                 "max_thrust": LaunchConfiguration('max_thrust'),
-                "control_modes_file": LaunchConfiguration('control_modes_file')
+                "control_modes_file": LaunchConfiguration('control_modes_file'),
+                "external_odom" : LaunchConfiguration('external_odom'),
+                "drone_URI" : LaunchConfiguration('drone_URI')
                 }],
             remappings=[("sensor_measurements/odometry", "self_localization/odom")],
             condition= launch.conditions.UnlessCondition(LaunchConfiguration("simulation_mode"))
@@ -52,7 +56,8 @@ def generate_launch_description():
                 {"mass": LaunchConfiguration('mass'),
                 "simulation_mode": LaunchConfiguration('simulation_mode'),
                 "max_thrust": LaunchConfiguration('max_thrust'),
-                "control_modes_file": LaunchConfiguration('control_modes_file')
+                "control_modes_file": LaunchConfiguration('control_modes_file'),
+                "external_odom" : LaunchConfiguration('external_odom')
                 }],
             remappings=[("sensor_measurements/odometry", "self_localization/odom")],
             condition= launch.conditions.IfCondition(LaunchConfiguration("simulation_mode"))

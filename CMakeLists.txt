@@ -46,6 +46,7 @@ ament_target_dependencies(${PROJECT_NAME}_node
   as2_core
   as2_msgs
   geometry_msgs
+  Eigen3
 )
 target_link_libraries(${PROJECT_NAME}_node 
   crazyflie_cpp
