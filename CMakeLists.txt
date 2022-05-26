@@ -23,6 +23,7 @@ find_package(nav_msgs REQUIRED)
 find_package(as2_core REQUIRED)
 find_package(as2_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(Eigen3 REQUIRED)
 # Faltal los packages del crazyflie_cpp
 
 
@@ -33,6 +34,7 @@ set(HEADER_HPP_FILES
 include_directories(
   include/${PROJECT_NAME}
   crazyflie_cpp/include/crazyflie_cpp
+  ${EIGEN3_INCLUDE_DIRS}
 )
 
 
