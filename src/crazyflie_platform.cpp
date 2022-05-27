@@ -220,14 +220,15 @@ void CrazyfliePlatform::onLogBattery(uint32_t /*time_in_ms*/, struct logBattery 
 
 void CrazyfliePlatform::configureSensors()
 {
-  // TODO: Change to as2_names::topics::sensor_measurements::imu
-  imu_sensor_ptr_ = std::make_unique<as2::sensors::Imu>("imu", this);
+  imu_sensor_ptr_ = std::make_unique<as2::sensors::Imu>(as2_names::topics::sensor_measurements::imu, this);
   odom_estimate_ptr_ = std::make_unique<as2::sensors::Sensor<nav_msgs::msg::Odometry>>("odometry", this);
-  battery_sensor_ptr_ = std::make_unique<as2::sensors::Sensor<sensor_msgs::msg::BatteryState>>("battery", this);
+  battery_sensor_ptr_ = std::make_unique<as2::sensors::Sensor<sensor_msgs::msg::BatteryState>>(as2_names::topics::sensor_measurements::battery, this);
 }
 
 bool CrazyfliePlatform::ownSendCommand()
 {
+  // If the drones doesn't receive constantly commands it stops. Therefore setting the UNSET mode or any that does not send any
+  // commands will make the drone to stop the propellers.
   as2_msgs::msg::ControlMode platform_control_mode = this->getControlMode();
   const double vx = this->command_twist_msg_.twist.linear.x;
   const double vy = this->command_twist_msg_.twist.linear.y;
@@ -278,7 +279,7 @@ bool CrazyfliePlatform::ownSendCommand()
   }
   else if (platform_control_mode.control_mode == as2_msgs::msg::ControlMode::UNSET)
   {
-    cf_->sendStop();
+    cf_->sendStop(); // Not really needed, will stop anyway if no command is set.
   }
   /* TODO: Acro Mode
   else if (msg.control_mode == as2_msgs::msg::ControlMode::ACRO)
