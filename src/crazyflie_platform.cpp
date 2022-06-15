@@ -385,7 +385,7 @@ void CrazyfliePlatform::listVariables()
                   output_stream << ")";
                   output_stream << std::endl;
 
-                  RCLCPP_DEBUG(this->get_logger(), output_stream.str());
+                  RCLCPP_DEBUG(this->get_logger(), std::string{output_stream.str()}.c_str());
                 });
 }
 
