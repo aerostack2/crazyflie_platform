@@ -39,6 +39,6 @@ def generate_launch_description():
                 "external_odom" : LaunchConfiguration('external_odom'),
                 "drone_URI" : LaunchConfiguration('drone_URI')
                 }],
-            remappings=[("sensor_measurements/odometry", "self_localization/odom")],
+            #remappings=[("sensor_measurements/odometry", "self_localization/odom")],
         )    
     ])
