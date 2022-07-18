@@ -97,15 +97,15 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
   // Optitrack
   this->declare_parameter<bool>("external_odom", false);
   this->get_parameter("external_odom", external_odom_);
-
-  RCLCPP_DEBUG(this->get_logger(), "External Localization: %d", external_odom_);
+  this->declare_parameter<std::string>("external_odom_topic", "external_odom");
+  this->get_parameter("external_odom_topic", external_odom_topic_);
 
   // If using external localization, create the subscriber to it
   if (external_odom_)
   {
-    std::string external_odom_topic_;
+    RCLCPP_INFO(this->get_logger(), "External Localization: %s", external_odom_topic_.c_str());
     external_odom_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
-        "external_odom",
+        external_odom_topic_,
         10,
         std::bind(&CrazyfliePlatform::externalOdomCB, this, std::placeholders::_1));
     RCLCPP_DEBUG(this->get_logger(), "Subscribed to external odom topic!");
