@@ -220,9 +220,9 @@ void CrazyfliePlatform::onLogBattery(uint32_t /*time_in_ms*/, struct logBattery 
 
 void CrazyfliePlatform::configureSensors()
 {
-  imu_sensor_ptr_ = std::make_unique<as2::sensors::Imu>(as2_names::topics::sensor_measurements::imu, this);
-  odom_estimate_ptr_ = std::make_unique<as2::sensors::Sensor<nav_msgs::msg::Odometry>>(as2_names::topics::sensor_measurements::odom, this);
-  battery_sensor_ptr_ = std::make_unique<as2::sensors::Sensor<sensor_msgs::msg::BatteryState>>(as2_names::topics::sensor_measurements::battery, this);
+  imu_sensor_ptr_ = std::make_unique<as2::sensors::Imu>("imu", this);
+  odom_estimate_ptr_ = std::make_unique<as2::sensors::Sensor<nav_msgs::msg::Odometry>>("odom", this);
+  battery_sensor_ptr_ = std::make_unique<as2::sensors::Sensor<sensor_msgs::msg::BatteryState>>("battery", this);
 }
 
 bool CrazyfliePlatform::ownSendCommand()
