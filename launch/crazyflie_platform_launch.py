@@ -25,6 +25,8 @@ def generate_launch_description():
         DeclareLaunchArgument('external_odom',default_value='true'),
         DeclareLaunchArgument('drone_URI',default_value='radio://0/80/250K/E7E7E7E7E7'),
         DeclareLaunchArgument('external_odom_topic',default_value='external_odom'),
+        DeclareLaunchArgument('simulation_mode',default_value='false'),
+        DeclareLaunchArgument('min_thrust',default_value='0.0'),
         # if is not in simulation
         Node(
             package="crazyflie_platform",
@@ -39,7 +41,9 @@ def generate_launch_description():
                 "control_modes_file": LaunchConfiguration('control_modes_file'),
                 "external_odom" : LaunchConfiguration('external_odom'),
                 "drone_URI" : LaunchConfiguration('drone_URI'),
-                "external_odom_topic" : LaunchConfiguration('external_odom_topic')
+                "external_odom_topic" : LaunchConfiguration('external_odom_topic'),
+                "min_thrust": LaunchConfiguration('min_thrust'),
+                "simulation_mode": LaunchConfiguration('simulation_mode')
                 }],
             #remappings=[("sensor_measurements/odometry", "self_localization/odom")],
         )    
