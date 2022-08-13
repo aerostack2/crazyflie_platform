@@ -93,6 +93,7 @@ private:
     bool is_connected_;
     bool is_armed_;
     std::string uri_;
+    uint8_t controller_type_;
 
     /*  --  SENSORS --  */
 

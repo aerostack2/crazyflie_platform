@@ -62,8 +62,17 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
   listVariables();
-  cf_->logReset();
+  //cf_->logReset();
 
+
+  /*    CONFIGURATION    */  
+  this->declare_parameter<uint8_t>("controller_type", 1); // Any(0), PID(1), Mellinger(2), INDI(3)
+  this->get_parameter("controller_type", controller_type_);
+  if(controller_type_ < 0 || controller_type_ > 3)
+    controller_type_ = 1;
+  cf_->setParamByName<uint8_t>("stabilizer", "controller", (uint8_t)controller_type_);
+
+  
   /*    SENSOR LOGGING    */
   cf_->requestLogToc(true);
 
