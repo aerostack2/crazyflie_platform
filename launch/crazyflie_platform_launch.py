@@ -19,7 +19,7 @@ def generate_launch_description():
     DRONE_ID = os.environ['AEROSTACK2_SIMULATION_DRONE_ID']
     return LaunchDescription([
         DeclareLaunchArgument('drone_id', default_value=DRONE_ID),
-        DeclareLaunchArgument('mass', default_value='1.0'),
+        DeclareLaunchArgument('mass', default_value='0.029'),
         DeclareLaunchArgument('max_thrust', default_value='0.0'),
         DeclareLaunchArgument('control_modes_file', default_value=config),
         DeclareLaunchArgument('external_odom',default_value='true'),
