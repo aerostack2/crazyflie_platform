@@ -245,7 +245,7 @@ bool CrazyfliePlatform::ownSendCommand()
 
   const double rollRate = this->command_twist_msg_.twist.angular.x;
   const double pitchRate = this->command_twist_msg_.twist.angular.y;
-  const double yawRate = this->command_twist_msg_.twist.angular.z;
+  const double yawRate = (this->command_twist_msg_.twist.angular.z / 3.1416 * 180.0);
 
   const double thrust = this->command_thrust_msg_.thrust;
 
@@ -261,7 +261,7 @@ bool CrazyfliePlatform::ownSendCommand()
   const auto eulerAngles = this->quaternion2Euler(this->command_pose_msg_.pose.orientation);
   const double roll = eulerAngles[0];
   const double pitch = eulerAngles[1];
-  const double yaw = eulerAngles[2];
+  const double yaw = (eulerAngles[2] / 3.1416 * 180.0);
 
   if (platform_control_mode.yaw_mode == as2_msgs::msg::ControlMode::YAW_SPEED && platform_control_mode.reference_frame == as2_msgs::msg::ControlMode::LOCAL_ENU_FRAME && this->getArmingState() && is_connected_)
   {
@@ -269,6 +269,7 @@ bool CrazyfliePlatform::ownSendCommand()
     {
     case as2_msgs::msg::ControlMode::SPEED:
       cf_->sendVelocityWorldSetpoint(vx, vy, vz, yawRate);
+      RCLCPP_INFO(this->get_logger(),"Yawspeed: %f\n",yawRate);
       break;
 
     case as2_msgs::msg::ControlMode::SPEED_IN_A_PLANE:
