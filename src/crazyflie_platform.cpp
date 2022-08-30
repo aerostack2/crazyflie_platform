@@ -268,8 +268,7 @@ bool CrazyfliePlatform::ownSendCommand()
     switch (platform_control_mode.control_mode)
     {
     case as2_msgs::msg::ControlMode::SPEED:
-      cf_->sendVelocityWorldSetpoint(vx, vy, vz, yawRate);
-      RCLCPP_INFO(this->get_logger(),"Yawspeed: %f\n",yawRate);
+      cf_->sendVelocityWorldSetpoint(vx, vy, vz, -yawRate);
       break;
 
     case as2_msgs::msg::ControlMode::SPEED_IN_A_PLANE:
