@@ -82,7 +82,7 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
   std::vector<std::string> vars_odom1 = {"stateEstimate.qx", "stateEstimate.qy", "stateEstimate.qz", "stateEstimate.qw"};
   cb_odom_ori_ = std::bind(&CrazyfliePlatform::onLogOdomOri, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
   odom_logBlock_ori_ = std::make_shared<LogBlockGeneric>(cf_.get(), vars_odom1, nullptr, cb_odom_ori_);
-  odom_logBlock_ori_->start(10);
+  odom_logBlock_ori_->start(2);
 
   // std::vector<std::string> vars_odom2 = {"kalman.stateX", "kalman.stateY", "kalman.stateZ", "kalman.statePX", "kalman.statePY", "kalman.statePZ"};
   std::vector<std::string> vars_odom2 = {"stateEstimate.x", "stateEstimate.y", "stateEstimate.z", "stateEstimate.vx", "stateEstimate.vy", "stateEstimate.vz"};
@@ -122,7 +122,7 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
 
   /*    TIMERS   */
   ping_timer_ = this->create_wall_timer(
-      std::chrono::milliseconds(10), [this]()
+      std::chrono::milliseconds(2), [this]()
       { pingCB(); this->sendCommand(); });
 
   RCLCPP_INFO(this->get_logger(), "Finished Init");
@@ -200,10 +200,10 @@ void CrazyfliePlatform::updateOdom()
   odom_msg.header.stamp = timestamp;
   odom_msg.header.frame_id = "odom";
 
-  odom_msg.pose.pose.orientation.w = odom_buff_[0];
-  odom_msg.pose.pose.orientation.x = odom_buff_[1];
-  odom_msg.pose.pose.orientation.y = odom_buff_[2];
-  odom_msg.pose.pose.orientation.z = odom_buff_[3];
+  odom_msg.pose.pose.orientation.w = odom_buff_[3];
+  odom_msg.pose.pose.orientation.x = odom_buff_[0];
+  odom_msg.pose.pose.orientation.y = odom_buff_[1];
+  odom_msg.pose.pose.orientation.z = odom_buff_[2];
 
   odom_msg.pose.pose.position.x = odom_buff_[4];
   odom_msg.pose.pose.position.y = odom_buff_[5];
@@ -243,8 +243,8 @@ bool CrazyfliePlatform::ownSendCommand()
   const double vy = this->command_twist_msg_.twist.linear.y;
   const double vz = this->command_twist_msg_.twist.linear.z;
 
-  const double rollRate = this->command_twist_msg_.twist.angular.x;
-  const double pitchRate = this->command_twist_msg_.twist.angular.y;
+  const double rollRate = (this->command_twist_msg_.twist.angular.x / 3.1416 * 180.0);
+  const double pitchRate = (this->command_twist_msg_.twist.angular.y / 3.1416 * 180.0);
   const double yawRate = (this->command_twist_msg_.twist.angular.z / 3.1416 * 180.0);
 
   const double thrust = this->command_thrust_msg_.thrust;
@@ -259,8 +259,8 @@ bool CrazyfliePlatform::ownSendCommand()
   const double qw = this->command_pose_msg_.pose.orientation.w;
 
   const auto eulerAngles = this->quaternion2Euler(this->command_pose_msg_.pose.orientation);
-  const double roll = eulerAngles[0];
-  const double pitch = eulerAngles[1];
+  const double roll = (eulerAngles[0] / 3.1416 * 180.0);
+  const double pitch = (eulerAngles[1] / 3.1416 * 180.0);
   const double yaw = (eulerAngles[2] / 3.1416 * 180.0);
 
   if (platform_control_mode.yaw_mode == as2_msgs::msg::ControlMode::YAW_SPEED && platform_control_mode.reference_frame == as2_msgs::msg::ControlMode::LOCAL_ENU_FRAME && this->getArmingState() && is_connected_)
