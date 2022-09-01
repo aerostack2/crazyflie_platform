@@ -88,7 +88,7 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
   std::vector<std::string> vars_odom2 = {"stateEstimate.x", "stateEstimate.y", "stateEstimate.z", "stateEstimate.vx", "stateEstimate.vy", "stateEstimate.vz"};
   cb_odom_pos_ = std::bind(&CrazyfliePlatform::onLogOdomPos, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
   odom_logBlock_pos_ = std::make_shared<LogBlockGeneric>(cf_.get(), vars_odom2, nullptr, cb_odom_pos_);
-  odom_logBlock_pos_->start(10);
+  odom_logBlock_pos_->start(2);
 
   // IMU
   std::vector<std::string> vars_imu = {"gyro.x", "gyro.y", "gyro.z", "acc.x", "acc.y", "acc.z"};
@@ -420,8 +420,8 @@ void CrazyfliePlatform::pingCB()
 
 void CrazyfliePlatform::externalOdomCB(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
 {
-  // Send the external localization to the Crazyflie drone
-  cf_->sendExternalPoseUpdate(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z,
+  // Send the external localization to the Crazyflie drone. VICON in mm, this in m. TODO: Change vicon pkg and not here?
+  cf_->sendExternalPoseUpdate(msg->pose.position.x/1000.0, msg->pose.position.y/1000.0, msg->pose.position.z/1000.0,
                               msg->pose.orientation.x, msg->pose.orientation.y, msg->pose.orientation.z, msg->pose.orientation.w);
 }
 
