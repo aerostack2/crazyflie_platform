@@ -94,6 +94,7 @@ private:
     bool is_armed_;
     std::string uri_;
     uint8_t controller_type_;
+    uint8_t estimator_type_;
 
     /*  --  SENSORS --  */
 

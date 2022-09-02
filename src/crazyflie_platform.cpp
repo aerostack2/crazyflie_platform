@@ -72,6 +72,12 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
     controller_type_ = 1;
   cf_->setParamByName<uint8_t>("stabilizer", "controller", (uint8_t)controller_type_);
 
+  this->declare_parameter<uint8_t>("estimator_type", 2); // Any(0), Complementary(1), EKF(2)
+  this->get_parameter("estimator_type", estimator_type_);
+  if(estimator_type_ < 0 || estimator_type_ > 2)
+    estimator_type_ = 0;
+  cf_->setParamByName<uint8_t>("stabilizer", "estimator", (uint8_t)estimator_type_); // EKF
+
   
   /*    SENSOR LOGGING    */
   cf_->requestLogToc(true);

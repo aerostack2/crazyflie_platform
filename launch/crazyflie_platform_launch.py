@@ -28,6 +28,7 @@ def generate_launch_description():
         DeclareLaunchArgument('simulation_mode',default_value='false'),
         DeclareLaunchArgument('min_thrust',default_value='0.0'),
         DeclareLaunchArgument('controller_type',default_value='1'),
+        DeclareLaunchArgument('estimator_type',default_value='1'),
         # if is not in simulation
         Node(
             package="crazyflie_platform",
@@ -46,6 +47,7 @@ def generate_launch_description():
                 "min_thrust": LaunchConfiguration('min_thrust'),
                 "simulation_mode": LaunchConfiguration('simulation_mode'),
                 "controller_type": LaunchConfiguration('controller_type'),
+                "estimator_type": LaunchConfiguration('estimator_type'),
                 }],
             #remappings=[("sensor_measurements/odometry", "self_localization/odom")],
         )    
