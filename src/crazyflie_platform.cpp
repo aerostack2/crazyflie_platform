@@ -426,8 +426,8 @@ void CrazyfliePlatform::pingCB()
 
 void CrazyfliePlatform::externalOdomCB(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
 {
-  // Send the external localization to the Crazyflie drone. VICON in mm, this in m. TODO: Change vicon pkg and not here?
-  //cf_->sendExternalPoseUpdate(msg->pose.position.x/1000.0, msg->pose.position.y/1000.0, msg->pose.position.z/1000.0,
+  // Send the external localization to the Crazyflie drone. VICON in mm, this in m.
+  //cf_->sendExternalPoseUpdate(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z,
   //                            msg->pose.orientation.x, msg->pose.orientation.y, msg->pose.orientation.z, msg->pose.orientation.w);
   cf_->sendExternalPositionUpdate(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z);
 }
