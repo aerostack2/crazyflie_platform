@@ -75,8 +75,8 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
   this->declare_parameter<uint8_t>("estimator_type", 2); // Any(0), Complementary(1), EKF(2)
   this->get_parameter("estimator_type", estimator_type_);
   if(estimator_type_ < 0 || estimator_type_ > 2)
-    estimator_type_ = 0;
-  cf_->setParamByName<uint8_t>("stabilizer", "estimator", (uint8_t)estimator_type_); // EKF
+    estimator_type_ = 2;
+  cf_->setParamByName<uint8_t>("stabilizer", "estimator", (uint8_t)(estimator_type_)); // EKF
 
   
   /*    SENSOR LOGGING    */
@@ -427,8 +427,9 @@ void CrazyfliePlatform::pingCB()
 void CrazyfliePlatform::externalOdomCB(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
 {
   // Send the external localization to the Crazyflie drone. VICON in mm, this in m. TODO: Change vicon pkg and not here?
-  cf_->sendExternalPoseUpdate(msg->pose.position.x/1000.0, msg->pose.position.y/1000.0, msg->pose.position.z/1000.0,
-                              msg->pose.orientation.x, msg->pose.orientation.y, msg->pose.orientation.z, msg->pose.orientation.w);
+  //cf_->sendExternalPoseUpdate(msg->pose.position.x/1000.0, msg->pose.position.y/1000.0, msg->pose.position.z/1000.0,
+  //                            msg->pose.orientation.x, msg->pose.orientation.y, msg->pose.orientation.z, msg->pose.orientation.w);
+  cf_->sendExternalPositionUpdate(msg->pose.position.x/1000.0, msg->pose.position.y/1000.0, msg->pose.position.z/1000.0);
 }
 
 Eigen::Vector3d CrazyfliePlatform::quaternion2Euler(geometry_msgs::msg::Quaternion quat)
