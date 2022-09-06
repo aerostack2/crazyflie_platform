@@ -18,17 +18,17 @@ def generate_launch_description():
     )
     DRONE_ID = os.environ['AEROSTACK2_SIMULATION_DRONE_ID']
     return LaunchDescription([
-        DeclareLaunchArgument('drone_id', default_value=DRONE_ID),
+        DeclareLaunchArgument('drone_id', default_value=DRONE_ID, description='Drone namespace.'),
         DeclareLaunchArgument('mass', default_value='0.029'),
         DeclareLaunchArgument('max_thrust', default_value='0.0'),
+        DeclareLaunchArgument('min_thrust', default_value='0.0'),
         DeclareLaunchArgument('control_modes_file', default_value=config),
-        DeclareLaunchArgument('external_odom',default_value='true'),
-        DeclareLaunchArgument('drone_URI',default_value='radio://0/80/250K/E7E7E7E7E7'),
-        DeclareLaunchArgument('external_odom_topic',default_value='external_odom'),
-        DeclareLaunchArgument('simulation_mode',default_value='false'),
-        DeclareLaunchArgument('min_thrust',default_value='0.0'),
-        DeclareLaunchArgument('controller_type',default_value='1'),
-        DeclareLaunchArgument('estimator_type',default_value='1'),
+        DeclareLaunchArgument('drone_URI', default_value='radio://0/80/2M/E7E7E7E7E7', description='Crazyflie URI.'),
+        DeclareLaunchArgument('external_odom', default_value='false', choices=["true", "false"], description='Availability of external odometry.'),
+        DeclareLaunchArgument('external_odom_topic', default_value='external_odom', description='External odometry topic name.'),
+        DeclareLaunchArgument('simulation_mode', default_value='false', choices=["true", "false"], description="Simulation flag."),
+        DeclareLaunchArgument('controller_type', default_value='1', choices=["0", "1", "2", "3"], description="Controller type Any(0), PID(1), Mellinger(2), INDI(3) (Default: 0)."),
+        DeclareLaunchArgument('estimator_type', default_value='1', choices=["0", "1", "2"], description="Estimator type Any(0), complementary(1), kalman(2) (Default: 0)."),
         # if is not in simulation
         Node(
             package="crazyflie_platform",
