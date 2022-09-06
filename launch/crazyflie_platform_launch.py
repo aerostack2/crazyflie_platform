@@ -19,7 +19,7 @@ def generate_launch_description():
     DRONE_ID = os.environ['AEROSTACK2_SIMULATION_DRONE_ID']
     return LaunchDescription([
         DeclareLaunchArgument('drone_id', default_value=DRONE_ID),
-        DeclareLaunchArgument('mass', default_value='1.0'),
+        DeclareLaunchArgument('mass', default_value='0.029'),
         DeclareLaunchArgument('max_thrust', default_value='0.0'),
         DeclareLaunchArgument('control_modes_file', default_value=config),
         DeclareLaunchArgument('external_odom',default_value='true'),
@@ -27,6 +27,8 @@ def generate_launch_description():
         DeclareLaunchArgument('external_odom_topic',default_value='external_odom'),
         DeclareLaunchArgument('simulation_mode',default_value='false'),
         DeclareLaunchArgument('min_thrust',default_value='0.0'),
+        DeclareLaunchArgument('controller_type',default_value='1'),
+        DeclareLaunchArgument('estimator_type',default_value='1'),
         # if is not in simulation
         Node(
             package="crazyflie_platform",
@@ -43,7 +45,9 @@ def generate_launch_description():
                 "drone_URI" : LaunchConfiguration('drone_URI'),
                 "external_odom_topic" : LaunchConfiguration('external_odom_topic'),
                 "min_thrust": LaunchConfiguration('min_thrust'),
-                "simulation_mode": LaunchConfiguration('simulation_mode')
+                "simulation_mode": LaunchConfiguration('simulation_mode'),
+                "controller_type": LaunchConfiguration('controller_type'),
+                "estimator_type": LaunchConfiguration('estimator_type'),
                 }],
             #remappings=[("sensor_measurements/odometry", "self_localization/odom")],
         )    

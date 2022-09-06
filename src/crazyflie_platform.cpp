@@ -62,8 +62,23 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
   listVariables();
-  cf_->logReset();
+  //cf_->logReset();
 
+
+  /*    CONFIGURATION    */  
+  this->declare_parameter<uint8_t>("controller_type", 1); // Any(0), PID(1), Mellinger(2), INDI(3)
+  this->get_parameter("controller_type", controller_type_);
+  if(controller_type_ < 0 || controller_type_ > 3)
+    controller_type_ = 1;
+  cf_->setParamByName<uint8_t>("stabilizer", "controller", (uint8_t)(controller_type_));
+
+  this->declare_parameter<uint8_t>("estimator_type", 2); // Any(0), Complementary(1), EKF(2)
+  this->get_parameter("estimator_type", estimator_type_);
+  if(estimator_type_ < 0 || estimator_type_ > 2)
+    estimator_type_ = 2;
+  cf_->setParamByName<uint8_t>("stabilizer", "estimator", (uint8_t)(estimator_type_)); // EKF
+
+  
   /*    SENSOR LOGGING    */
   cf_->requestLogToc(true);
 
@@ -73,13 +88,13 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
   std::vector<std::string> vars_odom1 = {"stateEstimate.qx", "stateEstimate.qy", "stateEstimate.qz", "stateEstimate.qw"};
   cb_odom_ori_ = std::bind(&CrazyfliePlatform::onLogOdomOri, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
   odom_logBlock_ori_ = std::make_shared<LogBlockGeneric>(cf_.get(), vars_odom1, nullptr, cb_odom_ori_);
-  odom_logBlock_ori_->start(10);
+  odom_logBlock_ori_->start(2);
 
   // std::vector<std::string> vars_odom2 = {"kalman.stateX", "kalman.stateY", "kalman.stateZ", "kalman.statePX", "kalman.statePY", "kalman.statePZ"};
   std::vector<std::string> vars_odom2 = {"stateEstimate.x", "stateEstimate.y", "stateEstimate.z", "stateEstimate.vx", "stateEstimate.vy", "stateEstimate.vz"};
   cb_odom_pos_ = std::bind(&CrazyfliePlatform::onLogOdomPos, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
   odom_logBlock_pos_ = std::make_shared<LogBlockGeneric>(cf_.get(), vars_odom2, nullptr, cb_odom_pos_);
-  odom_logBlock_pos_->start(10);
+  odom_logBlock_pos_->start(2);
 
   // IMU
   std::vector<std::string> vars_imu = {"gyro.x", "gyro.y", "gyro.z", "acc.x", "acc.y", "acc.z"};
@@ -113,7 +128,7 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform()
 
   /*    TIMERS   */
   ping_timer_ = this->create_wall_timer(
-      std::chrono::milliseconds(10), [this]()
+      std::chrono::milliseconds(2), [this]()
       { pingCB(); this->sendCommand(); });
 
   RCLCPP_INFO(this->get_logger(), "Finished Init");
@@ -191,10 +206,10 @@ void CrazyfliePlatform::updateOdom()
   odom_msg.header.stamp = timestamp;
   odom_msg.header.frame_id = "odom";
 
-  odom_msg.pose.pose.orientation.w = odom_buff_[0];
-  odom_msg.pose.pose.orientation.x = odom_buff_[1];
-  odom_msg.pose.pose.orientation.y = odom_buff_[2];
-  odom_msg.pose.pose.orientation.z = odom_buff_[3];
+  odom_msg.pose.pose.orientation.w = odom_buff_[3];
+  odom_msg.pose.pose.orientation.x = odom_buff_[0];
+  odom_msg.pose.pose.orientation.y = odom_buff_[1];
+  odom_msg.pose.pose.orientation.z = odom_buff_[2];
 
   odom_msg.pose.pose.position.x = odom_buff_[4];
   odom_msg.pose.pose.position.y = odom_buff_[5];
@@ -234,9 +249,9 @@ bool CrazyfliePlatform::ownSendCommand()
   const double vy = this->command_twist_msg_.twist.linear.y;
   const double vz = this->command_twist_msg_.twist.linear.z;
 
-  const double rollRate = this->command_twist_msg_.twist.angular.x;
-  const double pitchRate = this->command_twist_msg_.twist.angular.y;
-  const double yawRate = this->command_twist_msg_.twist.angular.z;
+  const double rollRate = (this->command_twist_msg_.twist.angular.x / 3.1416 * 180.0);
+  const double pitchRate = (this->command_twist_msg_.twist.angular.y / 3.1416 * 180.0);
+  const double yawRate = (this->command_twist_msg_.twist.angular.z / 3.1416 * 180.0);
 
   const double thrust = this->command_thrust_msg_.thrust;
 
@@ -250,16 +265,16 @@ bool CrazyfliePlatform::ownSendCommand()
   const double qw = this->command_pose_msg_.pose.orientation.w;
 
   const auto eulerAngles = this->quaternion2Euler(this->command_pose_msg_.pose.orientation);
-  const double roll = eulerAngles[0];
-  const double pitch = eulerAngles[1];
-  const double yaw = eulerAngles[2];
+  const double roll = (eulerAngles[0] / 3.1416 * 180.0);
+  const double pitch = (eulerAngles[1] / 3.1416 * 180.0);
+  const double yaw = (eulerAngles[2] / 3.1416 * 180.0);
 
   if (platform_control_mode.yaw_mode == as2_msgs::msg::ControlMode::YAW_SPEED && platform_control_mode.reference_frame == as2_msgs::msg::ControlMode::LOCAL_ENU_FRAME && this->getArmingState() && is_connected_)
   {
     switch (platform_control_mode.control_mode)
     {
     case as2_msgs::msg::ControlMode::SPEED:
-      cf_->sendVelocityWorldSetpoint(vx, vy, vz, yawRate);
+      cf_->sendVelocityWorldSetpoint(vx, vy, vz, -yawRate);
       break;
 
     case as2_msgs::msg::ControlMode::SPEED_IN_A_PLANE:
@@ -411,9 +426,10 @@ void CrazyfliePlatform::pingCB()
 
 void CrazyfliePlatform::externalOdomCB(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
 {
-  // Send the external localization to the Crazyflie drone
-  cf_->sendExternalPoseUpdate(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z,
-                              msg->pose.orientation.x, msg->pose.orientation.y, msg->pose.orientation.z, msg->pose.orientation.w);
+  // Send the external localization to the Crazyflie drone. VICON in mm, this in m.
+  //cf_->sendExternalPoseUpdate(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z,
+  //                            msg->pose.orientation.x, msg->pose.orientation.y, msg->pose.orientation.z, msg->pose.orientation.w);
+  cf_->sendExternalPositionUpdate(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z);
 }
 
 Eigen::Vector3d CrazyfliePlatform::quaternion2Euler(geometry_msgs::msg::Quaternion quat)
