@@ -8,11 +8,6 @@ if(NOT CMAKE_CXX_STANDARD)
 endif()
 #########################
 
-# Add the crazyflie_cpp submodule
-add_subdirectory(crazyflie_cpp)
-
-
-
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -24,7 +19,22 @@ find_package(as2_core REQUIRED)
 find_package(as2_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(Eigen3 REQUIRED)
-# Faltal los packages del crazyflie_cpp
+
+
+#download the crazyflie_cpp from github
+find_package(crazyflie_cpp QUIET)
+if (${crazyflie_cpp_FOUND})
+  MESSAGE(STATUS "crazyflie_cpp found at ${crazyflie_cpp_DIR}")
+else (${crazyflie_cpp_FOUND})
+  MESSAGE(STATUS "crazyflie_cpp not found")
+  include(FetchContent)
+  FetchContent_Declare(
+  crazyflie_cpp
+  GIT_REPOSITORY https://github.com/whoenig/crazyflie_cpp.git
+  GIT_TAG 8b8391bc8e1899b4704723d22b5e4fa43ddef763
+  )
+  FetchContent_MakeAvailable(crazyflie_cpp)
+endif(${crazyflie_cpp_FOUND})
 
 
 set(HEADER_HPP_FILES
@@ -33,8 +43,8 @@ set(HEADER_HPP_FILES
 
 include_directories(
   include/${PROJECT_NAME}
-  crazyflie_cpp/include/crazyflie_cpp
   ${EIGEN3_INCLUDE_DIRS}
+  ${crazyflie_cpp_INCLUDE_DIRS}
 )
 
 
