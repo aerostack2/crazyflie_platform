@@ -33,6 +33,7 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  ********************************************************************************/
 #include "crazyflie_platform.hpp"
+#include <as2_core/utils/tf_utils.hpp>
 #include <iostream>
 #include "as2_core/core_functions.hpp"
 
@@ -125,11 +126,8 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform() {
     RCLCPP_DEBUG(this->get_logger(), "Subscribed to external odom topic!");
   }
 
-  /*    TIMERS   */
-  ping_timer_ = this->create_wall_timer(std::chrono::milliseconds(2), [this]() {
-    pingCB();
-    this->sendCommand();
-  });
+  /*  TIMERS */
+  ping_timer_ = this->create_wall_timer(std::chrono::milliseconds(10), [this]() { pingCB(); });
 
   RCLCPP_INFO(this->get_logger(), "Finished Init");
 }
@@ -197,12 +195,13 @@ void CrazyfliePlatform::updateOdom() {
   pos_rec_ = ori_rec_ = false;
 
   // Send the odom message from the data received from the drone
-  auto timestamp = this->get_clock()->now();
+  auto timestamp                          = this->get_clock()->now();
+  static const std::string odom_frame_id_ = as2::tf::generateTfName(this, "odom");
 
   nav_msgs::msg::Odometry odom_msg;
 
   odom_msg.header.stamp    = timestamp;
-  odom_msg.header.frame_id = "odom";
+  odom_msg.header.frame_id = odom_frame_id_;
 
   odom_msg.pose.pose.orientation.w = odom_buff_[3];
   odom_msg.pose.pose.orientation.x = odom_buff_[0];
@@ -288,14 +287,13 @@ bool CrazyfliePlatform::ownSendCommand() {
     cf_->sendPositionSetpoint(x, y, z, yaw);
   } else if (platform_control_mode.control_mode == as2_msgs::msg::ControlMode::UNSET) {
     cf_->sendStop();  // Not really needed, will stop anyway if no command is set.
-  }
-  /* TODO: Acro Mode
-  else if (msg.control_mode == as2_msgs::msg::ControlMode::ACRO)
-  {
-    cf_->sendSetpoint(roll,pitch,yawRate,thrust);
-  }
-  */
-  else {
+
+    // TODO: ATTITUDE Mode
+    /* } else if (platform_control_mode.control_mode == as2_msgs::msg::ControlMode::ATTITUDE) {
+     // Compute the thrust from the thrust message from N to PWM between 0 and 65535
+      cf_->sendSetpoint(roll, pitch, yawRate, thrust); }*/
+
+  } else {
     static rclcpp::Clock clock;
     RCLCPP_WARN_THROTTLE(this->get_logger(), clock, 2, "Command/Control Mode not supported");
     return false;
