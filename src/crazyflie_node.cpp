@@ -10,7 +10,7 @@
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
@@ -19,7 +19,7 @@
  * 3. Neither the name of the copyright holder nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
  * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
@@ -32,20 +32,17 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  ********************************************************************************/
-#include "crazyflie_platform.hpp"
 #include <iostream>
 #include "as2_core/core_functions.hpp"
+#include "crazyflie_platform.hpp"
 
-int main(int argc, char * argv[])
-{
+int main(int argc, char* argv[]) {
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<CrazyfliePlatform>();
+  node->preset_loop_frequency(300);
+  as2::spinLoop(node);
+  RCLCPP_INFO(node->get_logger(), "Ending!");
 
-    rclcpp::init(argc, argv);
-    auto node = std::make_shared<CrazyfliePlatform>();
-    node->preset_loop_frequency(300);
-    as2::spinLoop(node);  
-    RCLCPP_INFO(node->get_logger(), "Ending!");
-
-
-    rclcpp::shutdown();
-    return 0;
+  rclcpp::shutdown();
+  return 0;
 }
