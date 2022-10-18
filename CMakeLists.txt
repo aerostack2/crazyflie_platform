@@ -25,6 +25,7 @@ find_package(Eigen3 REQUIRED)
 find_package(crazyflie_cpp QUIET)
 if (${crazyflie_cpp_FOUND})
   MESSAGE(STATUS "crazyflie_cpp found at ${crazyflie_cpp_DIR}")
+  find_package(crazyflie_cpp REQUIRED)
 else (${crazyflie_cpp_FOUND})
   MESSAGE(STATUS "crazyflie_cpp not found")
   include(FetchContent)
@@ -36,7 +37,6 @@ else (${crazyflie_cpp_FOUND})
   FetchContent_MakeAvailable(crazyflie_cpp)
 endif(${crazyflie_cpp_FOUND})
 
-
 set(HEADER_HPP_FILES
   include/crazyflie_platform.hpp
 )
@@ -44,7 +44,6 @@ set(HEADER_HPP_FILES
 include_directories(
   include/${PROJECT_NAME}
   ${EIGEN3_INCLUDE_DIRS}
-  ${crazyflie_cpp_INCLUDE_DIRS}
 )
 
 
@@ -61,9 +60,8 @@ ament_target_dependencies(${PROJECT_NAME}_node
   Eigen3
 )
 target_link_libraries(${PROJECT_NAME}_node 
-  crazyflie_cpp
+  crazyflie_cpp::crazyflie_cpp
 )
-
 
 
 if(BUILD_TESTING)
