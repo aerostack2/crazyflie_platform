@@ -8,7 +8,6 @@ from launch.substitutions import LaunchConfiguration, EnvironmentVariable
 from ament_index_python.packages import get_package_share_directory
 import os
 
-
 def generate_launch_description():
     config = join(
         get_package_share_directory('crazyflie_platform'),
@@ -53,5 +52,21 @@ def generate_launch_description():
                 "estimator_type": LaunchConfiguration('estimator_type'),
                 }],
             #remappings=[("sensor_measurements/odometry", "self_localization/odom")],
+        ),
+        Node(
+            package='crazyflie_platform',
+            executable='aideck_node.py',
+            name='aideck_pub',
+            output='screen',
+            emulate_tty=True,
+            parameters=[
+                {'ip': LaunchConfiguration('ip'),
+                'port': LaunchConfiguration('port'),
+                'save_flag': LaunchConfiguration('save_flag'),
+                'show_flag': LaunchConfiguration('show_flag'),
+                }
+            ]
         )
+
+
     ])

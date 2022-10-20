@@ -10,7 +10,10 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclpy REQUIRED)
+
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -22,10 +25,12 @@ find_package(Eigen3 REQUIRED)
 
 
 #download the crazyflie_cpp from github
+set(USE_CRAZYFLIE_COMPLETE_LIB OFF)
 find_package(crazyflie_cpp QUIET)
 if (${crazyflie_cpp_FOUND})
   MESSAGE(STATUS "crazyflie_cpp found at ${crazyflie_cpp_DIR}")
   find_package(crazyflie_cpp REQUIRED)
+  set(USE_CRAZYFLIE_COMPLETE_LIB ON)
 else (${crazyflie_cpp_FOUND})
   MESSAGE(STATUS "crazyflie_cpp not found")
   include(FetchContent)
@@ -59,10 +64,17 @@ ament_target_dependencies(${PROJECT_NAME}_node
   geometry_msgs
   Eigen3
 )
-target_link_libraries(${PROJECT_NAME}_node 
-  crazyflie_cpp::crazyflie_cpp
-)
 
+if (${USE_CRAZYFLIE_COMPLETE_LIB})
+  # message("Yes!! COMPLETE")
+  target_link_libraries(${PROJECT_NAME}_node 
+    crazyflie_cpp::crazyflie_cpp
+  )
+else (${USE_CRAZYFLIE_COMPLETE_LIB})
+target_link_libraries(${PROJECT_NAME}_node 
+  crazyflie_cpp
+)
+endif()
 
 if(BUILD_TESTING)
   find_package(ament_cmake_cppcheck REQUIRED)
@@ -86,5 +98,15 @@ install(DIRECTORY
 install(TARGETS
 ${PROJECT_NAME}_node
   DESTINATION lib/${PROJECT_NAME})
+
+
+# Install Python modules
+ament_python_install_package(${PROJECT_NAME})
+
+# Install Python executables
+install(PROGRAMS
+  scripts/aideck_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 ament_package()
