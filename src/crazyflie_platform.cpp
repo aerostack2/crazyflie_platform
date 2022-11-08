@@ -71,6 +71,10 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform() {
   if (estimator_type_ < 0 || estimator_type_ > 2) estimator_type_ = 2;
   cf_->setParamByName<uint8_t>("stabilizer", "estimator", (uint8_t)(estimator_type_));  // EKF
 
+  stop_sub_ = this->create_subscription<std_msgs::msg::Bool>(
+      this->generate_global_name("platform/stop"), rclcpp::SystemDefaultsQoS(),
+      [this](const std_msgs::msg::Bool::ConstSharedPtr msg) { cf_->emergencyStop(); });
+
   /*    SENSOR LOGGING    */
   cf_->requestLogToc(true);
 
@@ -99,7 +103,7 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform() {
   // IMU
   std::vector<std::string> vars_imu = {"gyro.x", "gyro.y", "gyro.z", "acc.x", "acc.y", "acc.z"};
   cb_imu_       = std::bind(&CrazyfliePlatform::onLogIMU, this, std::placeholders::_1,
-                      std::placeholders::_2, std::placeholders::_3);
+                            std::placeholders::_2, std::placeholders::_3);
   imu_logBlock_ = std::make_shared<LogBlockGeneric>(cf_.get(), vars_imu, nullptr, cb_imu_);
   imu_logBlock_->start(10);
 
@@ -195,13 +199,15 @@ void CrazyfliePlatform::updateOdom() {
   pos_rec_ = ori_rec_ = false;
 
   // Send the odom message from the data received from the drone
-  auto timestamp                          = this->get_clock()->now();
-  static const std::string odom_frame_id_ = as2::tf::generateTfName(this, "odom");
+  auto timestamp                               = this->get_clock()->now();
+  static const std::string odom_frame_id_      = as2::tf::generateTfName(this, "odom");
+  static const std::string base_link_frame_id_ = as2::tf::generateTfName(this, "base_link");
 
   nav_msgs::msg::Odometry odom_msg;
 
   odom_msg.header.stamp    = timestamp;
   odom_msg.header.frame_id = odom_frame_id_;
+  odom_msg.child_frame_id  = base_link_frame_id_;
 
   odom_msg.pose.pose.orientation.w = odom_buff_[3];
   odom_msg.pose.pose.orientation.x = odom_buff_[0];

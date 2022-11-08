@@ -52,6 +52,7 @@
 #include "sensor_msgs/msg/imu.hpp"
 #include "sensor_msgs/msg/nav_sat_fix.hpp"
 #include "sensor_msgs/msg/nav_sat_status.hpp"
+#include "std_msgs/msg/bool.hpp"
 
 struct logBattery {
   float pm_vbat;
@@ -94,6 +95,8 @@ private:
   std::string uri_;
   uint8_t controller_type_;
   uint8_t estimator_type_;
+
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr stop_sub_;
 
   /*  --  SENSORS --  */
 
