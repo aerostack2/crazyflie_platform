@@ -39,7 +39,7 @@
 int main(int argc, char* argv[]) {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<CrazyfliePlatform>();
-  node->preset_loop_frequency(300);
+  node->preset_loop_frequency(70);
   as2::spinLoop(node);
   RCLCPP_INFO(node->get_logger(), "Ending!");
 
