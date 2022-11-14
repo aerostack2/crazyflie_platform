@@ -100,6 +100,9 @@ private:
 
   /*  --  SENSORS --  */
 
+  float initial_yaw_    = 0.0;
+  bool has_initial_yaw_ = false;
+
   // Odometry
   std::unique_ptr<as2::sensors::Sensor<nav_msgs::msg::Odometry>> odom_estimate_ptr_;
   double odom_buff_[10];

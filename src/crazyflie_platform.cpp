@@ -15,7 +15,7 @@
  *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
+ *    and/or speedother materials provided with the distribution.
  * 3. Neither the name of the copyright holder nor the names of its contributors
  *    may be used to endorse or promote products derived from this software
  *    without specific prior written permission.
@@ -33,8 +33,11 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  ********************************************************************************/
 #include "crazyflie_platform.hpp"
+#include <Eigen/src/Core/Matrix.h>
+#include <as2_core/utils/frame_utils.hpp>
 #include <as2_core/utils/tf_utils.hpp>
 #include <iostream>
+#include <rclcpp/qos.hpp>
 #include "as2_core/core_functions.hpp"
 
 CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform() {
@@ -75,6 +78,9 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform() {
       this->generate_global_name("platform/stop"), rclcpp::SystemDefaultsQoS(),
       [this](const std_msgs::msg::Bool::ConstSharedPtr msg) { cf_->emergencyStop(); });
 
+  // TODO: SET_THIS_AS_A_PARAM
+  cf_->setParamByName<float>("locSrv", "extQuatStdDev",
+                             (float)(0.045));  // external parameter value
   /*    SENSOR LOGGING    */
   cf_->requestLogToc(true);
 
@@ -103,7 +109,7 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform() {
   // IMU
   std::vector<std::string> vars_imu = {"gyro.x", "gyro.y", "gyro.z", "acc.x", "acc.y", "acc.z"};
   cb_imu_       = std::bind(&CrazyfliePlatform::onLogIMU, this, std::placeholders::_1,
-                            std::placeholders::_2, std::placeholders::_3);
+                      std::placeholders::_2, std::placeholders::_3);
   imu_logBlock_ = std::make_shared<LogBlockGeneric>(cf_.get(), vars_imu, nullptr, cb_imu_);
   imu_logBlock_->start(10);
 
@@ -125,7 +131,7 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform() {
   if (external_odom_) {
     RCLCPP_INFO(this->get_logger(), "External Localization: %s", external_odom_topic_.c_str());
     external_odom_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
-        external_odom_topic_, 10,
+        external_odom_topic_, rclcpp::SensorDataQoS(),
         std::bind(&CrazyfliePlatform::externalOdomCB, this, std::placeholders::_1));
     RCLCPP_DEBUG(this->get_logger(), "Subscribed to external odom topic!");
   }
@@ -274,9 +280,17 @@ bool CrazyfliePlatform::ownSendCommand() {
       platform_control_mode.reference_frame == as2_msgs::msg::ControlMode::LOCAL_ENU_FRAME &&
       this->getArmingState() && is_connected_) {
     switch (platform_control_mode.control_mode) {
-      case as2_msgs::msg::ControlMode::SPEED:
+      case as2_msgs::msg::ControlMode::SPEED: {
+        /* if (external_odom_) {
+          if (!has_initial_yaw_) return false;
+          Eigen::Vector3d vel(vx, vy, vz);
+          geometry_msgs::msg::Quaternion q;
+          as2::frame::eulerToQuaternion(0, 0, initial_yaw_, q);
+          vel = as2::frame::convertENUtoFLU(q, vel);
+          cf_->sendVelocityWorldSetpoint(vel[0], vel[1], vel[2], yawRate);
+        } else { */
         cf_->sendVelocityWorldSetpoint(vx, vy, vz, -yawRate);
-        break;
+      } break;
 
       case as2_msgs::msg::ControlMode::SPEED_IN_A_PLANE:
         cf_->sendHoverSetpoint(vx, vy, yawRate, z);
@@ -407,11 +421,25 @@ void CrazyfliePlatform::pingCB() {
 }
 
 void CrazyfliePlatform::externalOdomCB(const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
-  // Send the external localization to the Crazyflie drone. VICON in mm, this in m.
-  // cf_->sendExternalPoseUpdate(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z,
-  //                            msg->pose.orientation.x, msg->pose.orientation.y,
-  //                            msg->pose.orientation.z, msg->pose.orientation.w);
-  cf_->sendExternalPositionUpdate(msg->pose.position.x, msg->pose.position.y, msg->pose.position.z);
+  static as2::tf::TfHandler tf_handler(this);
+  try {
+    const auto base_frame = as2::tf::generateTfName(this, "base_link");
+    const auto odom_frame = as2::tf::generateTfName(this, "odom");
+    auto pose             = tf_handler.getPoseStamped(odom_frame, base_frame);
+    // RCLCPP_INFO(this->get_logger(), "External Odom: %f %f %f", pose.pose.position.x,
+    // pose.pose.position.y, pose.pose.position.z);
+    // Send the external localization to the Crazyflie drone. VICON in mm, this in m.
+    cf_->sendExternalPoseUpdate(pose.pose.position.x, pose.pose.position.y, pose.pose.position.z,
+                                pose.pose.orientation.x, pose.pose.orientation.y,
+                                pose.pose.orientation.z, pose.pose.orientation.w);
+    /* RCLCPP_WARN(this->get_logger(), "External Odom [x,y,z]: %f, %f, %f",
+       msg->pose.position.x, msg->pose.position.y, msg->pose.position.z); */
+
+    /* cf_->sendExternalPositionUpdate(msg->pose.position.x, msg->pose.position.y,
+                                    msg->pose.position.z); */
+  } catch (tf2::TransformException &ex) {
+    RCLCPP_WARN(this->get_logger(), "Could not transform external odom: %s", ex.what());
+  }
 }
 
 Eigen::Vector3d CrazyfliePlatform::quaternion2Euler(geometry_msgs::msg::Quaternion quat) {
