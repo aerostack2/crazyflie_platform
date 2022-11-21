@@ -37,8 +37,9 @@ else (${crazyflie_cpp_FOUND})
   include(FetchContent)
   FetchContent_Declare(
   crazyflie_cpp
-  GIT_REPOSITORY https://github.com/whoenig/crazyflie_cpp.git
-  GIT_TAG 8b8391bc8e1899b4704723d22b5e4fa43ddef763
+  GIT_REPOSITORY https://github.com/miferco97/crazyflie_cpp.git
+  # GIT_TAG 8b8391bc8e1899b4704723d22b5e4fa43ddef763
+  GIT_TAG master
   )
   FetchContent_MakeAvailable(crazyflie_cpp)
 endif(${crazyflie_cpp_FOUND})
@@ -77,6 +78,33 @@ target_link_libraries(${PROJECT_NAME}_node
 )
 endif()
 
+
+add_executable(${PROJECT_NAME}_swarm_node src/crazyflie_swarm_nodes.cpp src/crazyflie_platform.cpp)
+ament_target_dependencies(${PROJECT_NAME}_swarm_node 
+  rclcpp 
+  sensor_msgs 
+  std_msgs
+  std_srvs
+  nav_msgs
+  as2_core
+  as2_msgs
+  geometry_msgs
+  Eigen3
+)
+
+if (${USE_CRAZYFLIE_COMPLETE_LIB})
+  # message("Yes!! COMPLETE")
+  target_link_libraries(${PROJECT_NAME}_swarm_node 
+    crazyflie_cpp::crazyflie_cpp
+  )
+else (${USE_CRAZYFLIE_COMPLETE_LIB})
+target_link_libraries(${PROJECT_NAME}_swarm_node 
+  crazyflie_cpp
+)
+endif()
+
+
+
 if(BUILD_TESTING)
   find_package(ament_cmake_cppcheck REQUIRED)
   find_package(ament_cmake_clang_format REQUIRED)
@@ -98,6 +126,7 @@ install(DIRECTORY
 
 install(TARGETS
 ${PROJECT_NAME}_node
+${PROJECT_NAME}_swarm_node
   DESTINATION lib/${PROJECT_NAME})
 
 

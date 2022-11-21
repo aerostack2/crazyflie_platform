@@ -61,16 +61,21 @@ struct logBattery {
 
 class CrazyfliePlatform : public as2::AerialPlatform {
 public:
+  void init();
   CrazyfliePlatform();
+  CrazyfliePlatform(const std::string &ns, const std::string &radio_uri);
+  void configureParams(const std::string &radio_uri = "");
 
   /*  --  AS2 FUNCTIONS --  */
 
-  void configureSensors();
+  void configureSensors() override;
 
-  bool ownSetArmingState(bool state);
-  bool ownSetOffboardControl(bool offboard);
-  bool ownSetPlatformControlMode(const as2_msgs::msg::ControlMode &msg);
-  bool ownSendCommand();
+  bool ownSetArmingState(bool state) override;
+  bool ownSetOffboardControl(bool offboard) override;
+  bool ownSetPlatformControlMode(const as2_msgs::msg::ControlMode &msg) override;
+  bool ownSendCommand() override;
+  void ownKillSwitch() override { cf_->emergencyStop(); }
+  void ownStopPlatform() override { cf_->sendStop(); };
 
   /*  --  CRAZYFLIE FUNCTIONS --  */
 
@@ -79,7 +84,7 @@ public:
   void onLogIMU(uint32_t time_in_ms, std::vector<double> *values, void * /*userData*/);
   void onLogOdomOri(uint32_t time_in_ms, std::vector<double> *values, void * /*userData*/);
   void onLogOdomPos(uint32_t time_in_ms, std::vector<double> *values, void * /*userData*/);
-  void onLogBattery(uint32_t /*time_in_ms*/, struct logBattery *data);
+  void onLogBattery();
   void updateOdom();
   void externalOdomCB(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
 
@@ -90,13 +95,14 @@ public:
 private:
   std::shared_ptr<Crazyflie> cf_;
   rclcpp::TimerBase::SharedPtr ping_timer_;
+  rclcpp::TimerBase::SharedPtr bat_timer_;
   bool is_connected_;
   bool is_armed_;
   std::string uri_;
   uint8_t controller_type_;
   uint8_t estimator_type_;
 
-  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr stop_sub_;
+  // rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr stop_sub_;
 
   /*  --  SENSORS --  */
 
@@ -124,8 +130,8 @@ private:
   std::unique_ptr<as2::sensors::Sensor<sensor_msgs::msg::BatteryState>> battery_sensor_ptr_;
   unsigned char battery_buff_;
 
-  std::unique_ptr<LogBlock<struct logBattery>> bat_logBlock_;
-  std::function<void(uint32_t, struct logBattery *)> cb_bat_;
+  /* std::unique_ptr<LogBlock<struct logBattery>> bat_logBlock_;
+  std::function<void(uint32_t, struct logBattery *)> cb_bat_; */
 
   // Optitrack
   bool external_odom_;

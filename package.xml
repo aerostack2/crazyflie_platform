@@ -4,7 +4,7 @@
   <name>crazyflie_platform</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="miguelgranero99@gmail.com">miguel</maintainer>
+  <maintainer email="cvar.upm3@gmail.com">cvar</maintainer>
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
