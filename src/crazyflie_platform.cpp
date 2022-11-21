@@ -37,16 +37,22 @@
 #include <as2_core/utils/frame_utils.hpp>
 #include <as2_core/utils/tf_utils.hpp>
 #include <iostream>
+#include <rclcpp/logging.hpp>
 #include <rclcpp/qos.hpp>
 #include "as2_core/core_functions.hpp"
 
-CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform() {
-  RCLCPP_DEBUG(this->get_logger(), "Init");
-  configureSensors();
+void CrazyfliePlatform::configureParams(const std::string &radio_uri) {
+  if (radio_uri.empty()) {
+    this->declare_parameter<std::string>("drone_URI", "radio://0/80/250K/E7E7E7E7E7");
+    this->get_parameter("drone_URI", uri_);
+  } else {
+    uri_ = radio_uri;
+  }
+}
 
+void CrazyfliePlatform::init() {
+  configureSensors();
   /*    SET-UP    */
-  this->declare_parameter<std::string>("drone_URI", "radio://0/80/250K/E7E7E7E7E7");
-  this->get_parameter("drone_URI", uri_);
   do {
     try {
       RCLCPP_DEBUG(this->get_logger(), "Connecting to: %s", uri_.c_str());
@@ -64,7 +70,8 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform() {
   listVariables();
 
   /*    CONFIGURATION    */
-  this->declare_parameter<uint8_t>("controller_type", 1);  // Any(0), PID(1), Mellinger(2), INDI(3)
+  this->declare_parameter<uint8_t>("controller_type",
+                                   1);  // Any(0), PID(1), Mellinger(2), INDI(3)
   this->get_parameter("controller_type", controller_type_);
   if (controller_type_ < 0 || controller_type_ > 3) controller_type_ = 1;
   cf_->setParamByName<uint8_t>("stabilizer", "controller", (uint8_t)(controller_type_));
@@ -74,16 +81,9 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform() {
   if (estimator_type_ < 0 || estimator_type_ > 2) estimator_type_ = 2;
   cf_->setParamByName<uint8_t>("stabilizer", "estimator", (uint8_t)(estimator_type_));  // EKF
 
-  stop_sub_ = this->create_subscription<std_msgs::msg::Bool>(
-      this->generate_global_name("platform/stop"), rclcpp::SystemDefaultsQoS(),
-      [this](const std_msgs::msg::Bool::ConstSharedPtr msg) { cf_->emergencyStop(); });
-
   // TODO: SET_THIS_AS_A_PARAM
   cf_->setParamByName<float>("locSrv", "extQuatStdDev",
                              (float)(0.045));  // external parameter value
-  /*    SENSOR LOGGING    */
-  cf_->requestLogToc(true);
-
   // Odom
   ori_rec_ = pos_rec_ = false;
   // std::vector<std::string> vars_odom1 = {"kalman.q0","kalman.q1","kalman.q2","kalman.q3"};
@@ -113,15 +113,7 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform() {
   imu_logBlock_ = std::make_shared<LogBlockGeneric>(cf_.get(), vars_imu, nullptr, cb_imu_);
   imu_logBlock_->start(10);
 
-  // Batterry
-  std::vector<std::string> vars_bat = {"pm.batteryLevel"};
-  cb_bat_ = std::bind(&CrazyfliePlatform::onLogBattery, this, std::placeholders::_1,
-                      std::placeholders::_2);
-  bat_logBlock_.reset(new LogBlock<struct logBattery>(
-      cf_.get(), {{"pm", "vbat"}, {"pm", "batteryLevel"}}, cb_bat_));
-  bat_logBlock_->start(100);
-
-  // Optitrack
+  // External estimation
   this->declare_parameter<bool>("external_odom", false);
   this->get_parameter("external_odom", external_odom_);
   this->declare_parameter<std::string>("external_odom_topic", "external_odom");
@@ -138,9 +130,24 @@ CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform() {
 
   /*  TIMERS */
   ping_timer_ = this->create_wall_timer(std::chrono::milliseconds(10), [this]() { pingCB(); });
+  bat_timer_ =
+      this->create_wall_timer(std::chrono::milliseconds(100), [this]() { onLogBattery(); });
 
   RCLCPP_INFO(this->get_logger(), "Finished Init");
 }
+
+CrazyfliePlatform::CrazyfliePlatform() : as2::AerialPlatform() {
+  RCLCPP_INFO(this->get_logger(), "CrazyfliePlatform::CrazyfliePlatform");
+  configureParams();
+  init();
+}
+
+CrazyfliePlatform::CrazyfliePlatform(const std::string &ns, const std::string &radio_uri)
+    : as2::AerialPlatform(ns), uri_(radio_uri) {
+  RCLCPP_INFO(get_logger(), "CrazyfliePlatform constructor with ns[%s] and uri[%s]", ns.c_str(),
+              radio_uri.c_str());
+  init();
+};
 
 void CrazyfliePlatform::onLogIMU(uint32_t time_in_ms,
                                  std::vector<double> *values,
@@ -231,12 +238,12 @@ void CrazyfliePlatform::updateOdom() {
   odom_estimate_ptr_->updateData(odom_msg);
 }
 
-void CrazyfliePlatform::onLogBattery(uint32_t /*time_in_ms*/, struct logBattery *data) {
+void CrazyfliePlatform::onLogBattery() {
+  auto bat = cf_->vbat();
+  // RCLCPP_INFO(this->get_logger(), "Battery: %f", bat);
   sensor_msgs::msg::BatteryState msg;
-
-  msg.percentage = data->charge_percent;
-  msg.voltage    = data->pm_vbat;
-
+  msg.percentage = bat / 4.2 * 100.0;  // 4.2V is the max voltage of the battery
+  msg.voltage    = bat;
   battery_sensor_ptr_->updateData(msg);
 }
 
@@ -249,12 +256,13 @@ void CrazyfliePlatform::configureSensors() {
 }
 
 bool CrazyfliePlatform::ownSendCommand() {
-  // If the drones doesn't receive constantly commands it stops. Therefore setting the UNSET mode or
-  // any that does not send any commands will make the drone to stop the propellers.
+  // If the drones doesn't receive constantly commands it stops. Therefore setting the UNSET
+  // mode or any that does not send any commands will make the drone to stop the propellers.
+
   as2_msgs::msg::ControlMode platform_control_mode = this->getControlMode();
-  const double vx                                  = this->command_twist_msg_.twist.linear.x;
-  const double vy                                  = this->command_twist_msg_.twist.linear.y;
-  const double vz                                  = this->command_twist_msg_.twist.linear.z;
+
+  /* LIST OF ALL VARIABLES THAT CAN BE USED, REDUCE UNNECESSARY VARIABLES depending on the
+   * control mode
 
   const double rollRate  = (this->command_twist_msg_.twist.angular.x / 3.1416 * 180.0);
   const double pitchRate = (this->command_twist_msg_.twist.angular.y / 3.1416 * 180.0);
@@ -262,8 +270,8 @@ bool CrazyfliePlatform::ownSendCommand() {
 
   const double thrust = this->command_thrust_msg_.thrust;
 
-  const double x = this->command_pose_msg_.pose.position.x;
   const double y = this->command_pose_msg_.pose.position.y;
+  const double x = this->command_pose_msg_.pose.position.x;
   const double z = this->command_pose_msg_.pose.position.z;
 
   const double qx = this->command_pose_msg_.pose.orientation.x;
@@ -274,28 +282,28 @@ bool CrazyfliePlatform::ownSendCommand() {
   const auto eulerAngles = this->quaternion2Euler(this->command_pose_msg_.pose.orientation);
   const double roll      = (eulerAngles[0] / 3.1416 * 180.0);
   const double pitch     = (eulerAngles[1] / 3.1416 * 180.0);
-  const double yaw       = (eulerAngles[2] / 3.1416 * 180.0);
+  const double yaw       = (eulerAngles[2] / 3.1416 * 180.0); */
 
   if (platform_control_mode.yaw_mode == as2_msgs::msg::ControlMode::YAW_SPEED &&
       platform_control_mode.reference_frame == as2_msgs::msg::ControlMode::LOCAL_ENU_FRAME &&
       this->getArmingState() && is_connected_) {
     switch (platform_control_mode.control_mode) {
       case as2_msgs::msg::ControlMode::SPEED: {
-        /* if (external_odom_) {
-          if (!has_initial_yaw_) return false;
-          Eigen::Vector3d vel(vx, vy, vz);
-          geometry_msgs::msg::Quaternion q;
-          as2::frame::eulerToQuaternion(0, 0, initial_yaw_, q);
-          vel = as2::frame::convertENUtoFLU(q, vel);
-          cf_->sendVelocityWorldSetpoint(vel[0], vel[1], vel[2], yawRate);
-        } else { */
+        const double vx      = this->command_twist_msg_.twist.linear.x;
+        const double vy      = this->command_twist_msg_.twist.linear.y;
+        const double vz      = this->command_twist_msg_.twist.linear.z;
+        const double yawRate = (this->command_twist_msg_.twist.angular.z / 3.1416 * 180.0);
         cf_->sendVelocityWorldSetpoint(vx, vy, vz, -yawRate);
       } break;
 
-      case as2_msgs::msg::ControlMode::SPEED_IN_A_PLANE:
+      case as2_msgs::msg::ControlMode::SPEED_IN_A_PLANE: {
+        const double vx      = this->command_twist_msg_.twist.linear.x;
+        const double vy      = this->command_twist_msg_.twist.linear.y;
+        const double z       = this->command_pose_msg_.pose.position.z;
+        const double yawRate = (this->command_twist_msg_.twist.angular.z / 3.1416 * 180.0);
         cf_->sendHoverSetpoint(vx, vy, yawRate, z);
         RCLCPP_DEBUG(this->get_logger(), "Hover set to z: %f", z);
-        break;
+      } break;
 
       default:
         static rclcpp::Clock clock;
@@ -304,12 +312,18 @@ bool CrazyfliePlatform::ownSendCommand() {
     }
   } else if (platform_control_mode.control_mode == as2_msgs::msg::ControlMode::POSITION &&
              platform_control_mode.yaw_mode == as2_msgs::msg::ControlMode::YAW_ANGLE) {
+    const double y         = this->command_pose_msg_.pose.position.y;
+    const double x         = this->command_pose_msg_.pose.position.x;
+    const double z         = this->command_pose_msg_.pose.position.z;
+    const auto eulerAngles = this->quaternion2Euler(this->command_pose_msg_.pose.orientation);
+    const double yaw       = (eulerAngles[2] / 3.1416 * 180.0);
     cf_->sendPositionSetpoint(x, y, z, yaw);
   } else if (platform_control_mode.control_mode == as2_msgs::msg::ControlMode::UNSET) {
     cf_->sendStop();  // Not really needed, will stop anyway if no command is set.
 
     // TODO: ATTITUDE Mode
-    /* } else if (platform_control_mode.control_mode == as2_msgs::msg::ControlMode::ATTITUDE) {
+    /* } else if (platform_control_mode.control_mode == as2_msgs::msg::ControlMode::ATTITUDE)
+     {
      // Compute the thrust from the thrust message from N to PWM between 0 and 65535
       cf_->sendSetpoint(roll, pitch, yawRate, thrust); }*/
 
@@ -356,8 +370,8 @@ bool CrazyfliePlatform::ownSetPlatformControlMode(const as2_msgs::msg::ControlMo
   } else if (msg.control_mode == as2_msgs::msg::ControlMode::POSITION &&
              msg.yaw_mode == as2_msgs::msg::ControlMode::YAW_ANGLE)
     return true;
-  /* TODO: Add acro mode. Thrust is uint16_t and we need to know how it goes.
-  else if (msg.control_mode == as2_msgs::msg::ControlMode::ACRO)
+  /* TODO: Add attitude mode. Thrust is uint16_t and we need to know how it goes.
+  else if (msg.control_mode == as2_msgs::msg::ControlMode::ATTITUDE)
     return false;
   */
   else if (msg.control_mode == as2_msgs::msg::ControlMode::UNSET)
@@ -367,7 +381,7 @@ bool CrazyfliePlatform::ownSetPlatformControlMode(const as2_msgs::msg::ControlMo
 }
 
 void CrazyfliePlatform::listVariables() {
-  cf_->requestLogToc(true);
+  cf_->requestLogToc(false);
   std::for_each(cf_->logVariablesBegin(), cf_->logVariablesEnd(),
                 [this](const Crazyflie::LogTocEntry &entry) {
                   std::ostringstream output_stream;
@@ -401,13 +415,12 @@ void CrazyfliePlatform::listVariables() {
                   output_stream << ")";
                   output_stream << std::endl;
 
-                  RCLCPP_DEBUG(this->get_logger(), std::string{output_stream.str()}.c_str());
+                  RCLCPP_DEBUG(this->get_logger(), "%s", std::string{output_stream.str()}.c_str());
                 });
 }
 
 void CrazyfliePlatform::pingCB() {
   try {
-    cf_->getProtocolVersion();
     cf_->sendPing();
     if (!is_connected_) {
       is_connected_ = true;
@@ -422,21 +435,16 @@ void CrazyfliePlatform::pingCB() {
 
 void CrazyfliePlatform::externalOdomCB(const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
   static as2::tf::TfHandler tf_handler(this);
+  static const auto base_frame = as2::tf::generateTfName(this, "base_link");
+  static const auto odom_frame = as2::tf::generateTfName(this, "odom");
   try {
-    const auto base_frame = as2::tf::generateTfName(this, "base_link");
-    const auto odom_frame = as2::tf::generateTfName(this, "odom");
-    auto pose             = tf_handler.getPoseStamped(odom_frame, base_frame);
-    // RCLCPP_INFO(this->get_logger(), "External Odom: %f %f %f", pose.pose.position.x,
-    // pose.pose.position.y, pose.pose.position.z);
-    // Send the external localization to the Crazyflie drone. VICON in mm, this in m.
+    // pose obtained in odom frame to avoid yaw issues
+    auto pose = tf_handler.getPoseStamped(odom_frame, base_frame);
     cf_->sendExternalPoseUpdate(pose.pose.position.x, pose.pose.position.y, pose.pose.position.z,
                                 pose.pose.orientation.x, pose.pose.orientation.y,
                                 pose.pose.orientation.z, pose.pose.orientation.w);
-    /* RCLCPP_WARN(this->get_logger(), "External Odom [x,y,z]: %f, %f, %f",
-       msg->pose.position.x, msg->pose.position.y, msg->pose.position.z); */
-
-    /* cf_->sendExternalPositionUpdate(msg->pose.position.x, msg->pose.position.y,
-                                    msg->pose.position.z); */
+    cf_->sendExternalPositionUpdate(msg->pose.position.x, msg->pose.position.y,
+                                    msg->pose.position.z);
   } catch (tf2::TransformException &ex) {
     RCLCPP_WARN(this->get_logger(), "Could not transform external odom: %s", ex.what());
   }
